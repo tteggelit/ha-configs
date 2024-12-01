@@ -1,0 +1,963 @@
+- id: '1700873295417'
+  alias: Timed Hot Water Recirculation
+  description: Recirculates hot water every 15 minutes but only while the alarm is
+    disarmed (i.e., someone's home and not sleeping) and not between 1:30am and 4:00am
+  triggers:
+  - entity_id:
+    - binary_sensor.water_heater_recirculation
+    to: 'off'
+    for:
+      hours: 0
+      minutes: 20
+      seconds: 0
+    trigger: state
+  conditions:
+  - condition: and
+    conditions:
+    - condition: time
+      after: 04:00:00
+      before: 01:30:00
+    - condition: numeric_state
+      entity_id: sensor.home_basement_water_flow_rate
+      below: 1
+      enabled: true
+    - condition: state
+      entity_id: alarm_control_panel.abode_alarm
+      state: disarmed
+  actions:
+  - data:
+      recirculation_minutes: 5
+    target:
+      entity_id: water_heater.home_basement_water_heater
+    action: rinnai.start_recirculation
+  mode: single
+- id: '1702687858384'
+  alias: Garden Tower Pumps - Turn On
+  description: Turn the Garden Tower pumps on after being off for 45 minutes
+  trigger:
+  - platform: state
+    entity_id:
+    - switch.garden_tower_pumps_switch
+    to: 'off'
+    for:
+      hours: 0
+      minutes: 30
+      seconds: 0
+  condition: []
+  action:
+  - service: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.garden_tower_pumps_switch
+  mode: single
+- id: '1702687906351'
+  alias: Garden Tower Pumps - Turn Off
+  description: Turn the Garden Tower pumps off after being on for 5 minutes
+  trigger:
+  - platform: state
+    entity_id:
+    - switch.garden_tower_pumps_switch
+    to: 'on'
+    for:
+      hours: 0
+      minutes: 5
+      seconds: 0
+  condition: []
+  action:
+  - service: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.garden_tower_pumps_switch
+  mode: single
+- id: '1702687973093'
+  alias: Garden Tower Pumps - Toggle After Reboot
+  description: Toggle the Garden Tower pump switch when Home Assistant starts
+  trigger:
+  - platform: homeassistant
+    event: start
+  action:
+  - service: switch.toggle
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.garden_tower_pumps_switch
+  mode: single
+- id: '1702688753601'
+  alias: Turn Off Grow Tent Fans
+  description: Turn the grow tent fans off at 7pm
+  trigger:
+  - platform: time
+    at: '19:00:00'
+  condition: []
+  action:
+  - service: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - switch.grow_tent_fans_switch
+  mode: single
+- id: '1702688838173'
+  alias: Turn On Grow Tent Fans
+  description: Turn on grow tent fans at 7am
+  trigger:
+  - platform: time
+    at: 07:00:00
+  condition: []
+  action:
+  - service: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - switch.grow_tent_fans_switch
+  mode: single
+- id: '1702689491954'
+  alias: Guest Bedroom Door Opened Notification
+  description: Send a phone alert when the guest bedroom door is opened.
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.guest_bedroom_door_sensor_ias_zone
+    to: 'on'
+  condition: []
+  action:
+  - service: notify.mobile_app_tis_iphone
+    data:
+      message: Guest bedroom door opened
+      data:
+        push:
+          sound:
+            name: default
+            critical: 1
+            volume: 1
+  mode: single
+- id: '1702928810835'
+  alias: Motion Hot Water Recirculation
+  description: Recirculate the hot water when motion is detected in the any of the
+    bathrooms and water hasn't been recirculated in the last 15 minutes
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.master_bathroom_motion_sensor_motion_2
+    - binary_sensor.downstairs_bathroom_motion_sensor_motion_3
+    to: 'on'
+  condition:
+  - condition: state
+    entity_id: binary_sensor.water_heater_recirculation
+    state: 'off'
+    for:
+      hours: 0
+      minutes: 10
+      seconds: 0
+    enabled: true
+  action:
+  - service: rinnai.start_recirculation
+    data:
+      recirculation_minutes: 5
+    target:
+      entity_id: water_heater.home_basement_water_heater
+  mode: single
+- id: '1703623708618'
+  alias: Leak Detection & Notifier
+  description: ''
+  use_blueprint:
+    path: tteggelit/leak-detector-notifier.yaml
+    input:
+      notify_device: c649c07764020e9d99e38656cf640e62
+- id: '1703637809076'
+  alias: Turn On Holiday Decorations
+  description: Turn on holiday decorations sunset
+  triggers:
+  - event: sunset
+    offset: 0
+    trigger: sun
+  conditions: []
+  actions:
+  - metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - switch.studio_window_light_outlet_switch
+      - switch.loft_window_lights_outlet_switch_2
+      - switch.daylan_s_window_lights_outlet_switch_3
+      - switch.aidan_s_window_lights_outlet_switch_4
+      - switch.front_decorations
+    action: switch.turn_on
+  mode: single
+- id: '1703637961990'
+  alias: Turn Off Holiday Decorations
+  description: Turn off the holiday decorations at 10:30pm
+  triggers:
+  - at: '22:30:00'
+    trigger: time
+  conditions: []
+  actions:
+  - metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - switch.studio_window_light_outlet_switch
+      - switch.loft_window_lights_outlet_switch_2
+      - switch.front_decorations
+    action: switch.turn_off
+  mode: single
+- id: '1703648655388'
+  alias: Basement Freezer Open Notification
+  description: Notify if the freezer is left open for more than 2 minutes
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.basement_freezer_opening
+    to: 'on'
+    for:
+      hours: 0
+      minutes: 2
+      seconds: 0
+  condition: []
+  action:
+  - service: notify.mobile_app_tis_iphone
+    data:
+      message: Basement freezer left open
+      data:
+        push:
+          sound:
+            name: default
+            critical: 1
+            volume: 1
+  mode: single
+- id: '1703693744670'
+  alias: Daylan's Door Opened Notification
+  description: Notify when Daylan's door opens during the night
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.daylan_s_door_sensor_opening_2
+    to: 'on'
+  condition:
+  - condition: time
+    after: '21:30:00'
+    before: 06:00:00
+    weekday:
+    - sun
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+    - sat
+  action:
+  - service: notify.mobile_app_tis_iphone
+    data:
+      message: Daylan's door opened during the night
+  mode: single
+- id: '1703693873687'
+  alias: Turn Off Boys' Holiday Decorations
+  description: Turn off boys' window holiday lights at 9pm
+  triggers:
+  - at: '21:00:00'
+    trigger: time
+  conditions: []
+  actions:
+  - metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - switch.daylan_s_window_lights_outlet_switch_3
+      - switch.aidan_s_window_lights_outlet_switch_4
+    action: switch.turn_off
+  mode: single
+- id: '1703714762428'
+  alias: Turn On Kitchen Cabinet Lights (Evening)
+  description: Turn on kitchen cabinet lights 45 minutes before sunset
+  trigger:
+  - platform: sun
+    event: sunset
+    offset: -00:45:00
+  condition: []
+  action:
+  - service: scene.turn_on
+    target:
+      entity_id: scene.normal_cabinet_lights
+    metadata: {}
+  mode: single
+- id: '1703715453766'
+  alias: Turn Off Kitchen Cabinet Lights
+  description: Turn off kitchen cabinet lights
+  trigger:
+  - platform: time
+    at: 01:00:00
+  - platform: sun
+    event: sunrise
+    offset: 00:30:00
+  - platform: state
+    entity_id:
+    - alarm_control_panel.abode_alarm
+    to: armed_home
+  condition: []
+  action:
+  - service: light.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - light.kitchen_cabinet_lights_left_light_2
+      - light.kitchen_cabinet_lights_right_light_3
+  mode: single
+- id: '1704080218841'
+  alias: Turn On Pantry Light
+  description: Turn on pantry light when motion detected
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.pantry_motion_sensor_motion_4
+    to: 'on'
+  condition: []
+  action:
+  - service: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.pantry_light
+  mode: single
+- id: '1704080276347'
+  alias: Turn Off Pantry Light
+  description: Turn off pantry light when motion is no longer detected
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.pantry_motion_sensor_motion_4
+    to: 'off'
+    for:
+      hours: 0
+      minutes: 0
+      seconds: 30
+  condition: []
+  action:
+  - service: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.pantry_light
+  mode: single
+- id: '1704080363630'
+  alias: Turn On Master Closet Light
+  description: Turn on master closet light when motion is detected
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.master_closet_light_motion_detection
+    to: 'on'
+  condition: []
+  action:
+  - service: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.master_closet_light
+  mode: single
+- id: '1704080533451'
+  alias: Turn Off Master Closet Light
+  description: Turn off master closet light when motion is no longer detected
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.master_closet_light_motion_detection
+    to: 'off'
+    for:
+      hours: 0
+      minutes: 0
+      seconds: 30
+  condition: []
+  action:
+  - service: switch.turn_off
+    target:
+      entity_id:
+      - switch.master_closet_light
+    data: {}
+  mode: single
+- id: '1704080588094'
+  alias: Carriage Lights - Turn On
+  description: Turn on carriage lights at sunset
+  trigger:
+  - platform: sun
+    event: sunset
+    offset: 0
+  condition: []
+  action:
+  - service: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.carriage_lights
+  mode: single
+- id: '1704080632778'
+  alias: Carriage Lights - Turn Off
+  description: Turn off carriage lights at sunrise
+  trigger:
+  - platform: sun
+    event: sunrise
+    offset: 0
+  condition: []
+  action:
+  - service: switch.turn_off
+    target:
+      entity_id:
+      - switch.carriage_lights
+    data: {}
+  mode: single
+- id: '1704152978232'
+  alias: Deck Lights - Turn On
+  description: Turn on the deck lights at sunset
+  trigger:
+  - platform: sun
+    event: sunset
+    offset: 0
+  condition: []
+  action:
+  - service: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.deck_lights
+  mode: single
+- id: '1704153027046'
+  alias: Deck Lights - Turn Off
+  description: Turn off the deck lights at 10:30
+  trigger:
+  - platform: time
+    at: '22:30:00'
+  condition: []
+  action:
+  - service: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.deck_lights
+  mode: single
+- id: '1704289982249'
+  alias: Recirculate Hot Water After Returning Home
+  description: Recirculate the hot water if we've been away from home for more than
+    30 minutes
+  trigger:
+  - platform: state
+    entity_id:
+    - alarm_control_panel.abode_alarm
+    to: disarmed
+  condition:
+  - condition: state
+    entity_id: binary_sensor.water_heater_recirculation
+    state: 'off'
+    for:
+      hours: 0
+      minutes: 30
+      seconds: 0
+  action:
+  - service: rinnai.start_recirculation
+    target:
+      entity_id: water_heater.home_basement_water_heater
+    data:
+      recirculation_minutes: 5
+  mode: single
+- id: '1704753058492'
+  alias: Amy and Ti Left Home
+  description: Take some actions when both Amy and Ti aren't home
+  trigger:
+  - platform: device
+    device_id: c649c07764020e9d99e38656cf640e62
+    domain: device_tracker
+    entity_id: 5965ecf66909f3a0f926b23f8d4cef8b
+    type: leaves
+    zone: zone.home
+  - platform: device
+    device_id: ba46bf63c37c0f5c0e4c054b5d7286c7
+    domain: device_tracker
+    entity_id: 82547043c87592e35391f94b52bc7d8c
+    type: leaves
+    zone: zone.home
+  condition:
+  - condition: and
+    conditions:
+    - condition: device
+      device_id: c649c07764020e9d99e38656cf640e62
+      domain: device_tracker
+      entity_id: 5965ecf66909f3a0f926b23f8d4cef8b
+      type: is_not_home
+    - condition: device
+      device_id: ba46bf63c37c0f5c0e4c054b5d7286c7
+      domain: device_tracker
+      entity_id: 82547043c87592e35391f94b52bc7d8c
+      type: is_not_home
+  action:
+  - service: notify.mobile_app_tis_iphone
+    data:
+      message: Amy and Ti left home
+  mode: single
+- id: '1705443498464'
+  alias: Low Battery Notification and Todo Generator
+  description: Find sensors that have low batteries that need a todo created, notify
+    about the sensor battery, and create a todo in Todoist
+  trigger:
+  - platform: time
+    at: 09:00:00
+  condition: []
+  action:
+  - service: script.todo_test
+    data: {}
+  mode: single
+- id: '1711215722258'
+  alias: Alarm Away Actions
+  description: Check various states if the house alarm is set to away.
+  trigger:
+  - platform: state
+    entity_id:
+    - alarm_control_panel.abode_alarm
+    to: armed_away
+  condition: []
+  action:
+  - service: climate.set_preset_mode
+    metadata: {}
+    data:
+      preset_mode: away_indefinitely
+    target:
+      entity_id: climate.thermostat
+  - service: alarm_control_panel.alarm_arm_away
+    metadata: {}
+    data: {}
+    target:
+      entity_id: alarm_control_panel.ring_location_mode
+  - alias: If Front Door is open, then notify, otherwise check if it's locked
+    if:
+    - condition: state
+      entity_id: binary_sensor.front_door_sensor
+      state: 'on'
+    then:
+    - service: notify.mobile_app_tis_iphone
+      metadata: {}
+      data:
+        message: Front door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+    - service: notify.mobile_app_amys_iphone
+      data:
+        message: Front door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+    else:
+    - alias: If the front door is unlocked, then attempt to lock it and notify if
+        locking fails
+      if:
+      - condition: state
+        entity_id: lock.front_door_lock_door_lock
+        state: unlocked
+      then:
+      - service: lock.lock
+        metadata: {}
+        data: {}
+        target:
+          entity_id: lock.front_door_lock_door_lock
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 30
+          milliseconds: 0
+        alias: Wait 30 seconds
+      - alias: If Front Door still unlocked, notify
+        if:
+        - condition: state
+          entity_id: lock.front_door_lock_door_lock
+          state: unlocked
+        then:
+        - service: notify.mobile_app_tis_iphone
+          metadata: {}
+          data:
+            message: Front door unlocked!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+        - service: notify.mobile_app_amys_iphone
+          data:
+            message: Front door is open!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+  - alias: If the garage door is open, then attempt to close it and if that fails,
+      notify
+    if:
+    - condition: state
+      entity_id: cover.garage_door
+      state: open
+    then:
+    - service: cover.close_cover
+      metadata: {}
+      data: {}
+      target:
+        entity_id: cover.garage_door
+    - delay:
+        hours: 0
+        minutes: 1
+        seconds: 0
+        milliseconds: 0
+    - alias: Notify if the garage door is still open
+      if:
+      - condition: state
+        entity_id: cover.garage_door
+        state: open
+      then:
+      - service: notify.mobile_app_tis_iphone
+        metadata: {}
+        data:
+          message: Garage door is open!
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1
+      - service: notify.mobile_app_amys_iphone
+        data:
+          message: Garage door is open!
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1
+  - alias: If the 3rd car garage door is open, then attempt to close it and if that
+      fails, notify
+    if:
+    - condition: state
+      entity_id: binary_sensor.third_car_garage_door_opening
+      state: 'on'
+    then:
+    - service: notify.mobile_app_tis_iphone
+      metadata: {}
+      data:
+        message: Third car garage door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+    - service: notify.mobile_app_amys_iphone
+      data:
+        message: Third car garage door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+  mode: single
+- id: '1711216712567'
+  alias: Alarm Disarmed Actions
+  description: Actions to run when the alarm is disarmed
+  trigger:
+  - platform: state
+    entity_id:
+    - alarm_control_panel.abode_alarm
+    to: disarmed
+  condition: []
+  action:
+  - if:
+    - condition: sun
+      before: sunrise
+    then:
+    - service: scene.turn_on
+      metadata: {}
+      target:
+        entity_id: scene.normal_cabinet_lights
+    alias: Turn on cabinet lights if before sunrise
+  - service: climate.set_preset_mode
+    metadata: {}
+    data:
+      preset_mode: home
+    target:
+      entity_id: climate.thermostat
+  - service: alarm_control_panel.alarm_disarm
+    metadata: {}
+    data: {}
+    target:
+      entity_id: alarm_control_panel.ring_location_mode
+  mode: single
+- id: '1711921755033'
+  alias: Alarm Home Actions
+  description: Check various states if the house alarm is set to home.
+  trigger:
+  - platform: state
+    entity_id:
+    - alarm_control_panel.abode_alarm
+    to: armed_home
+  condition: []
+  action:
+  - service: ecobee.resume_program
+    data:
+      entity_id: climate.thermostat
+  - service: alarm_control_panel.alarm_arm_home
+    metadata: {}
+    data: {}
+    target:
+      entity_id: alarm_control_panel.ring_location_mode
+  - alias: If Front Door is open, then notify, otherwise check if it's locked
+    if:
+    - condition: state
+      entity_id: binary_sensor.front_door_sensor
+      state: 'on'
+    then:
+    - service: notify.mobile_app_tis_iphone
+      metadata: {}
+      data:
+        message: Front door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+    - service: notify.mobile_app_amys_iphone
+      metadata: {}
+      data:
+        message: Front door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+    else:
+    - alias: If the front door is unlocked, then attempt to lock it and notify if
+        locking fails
+      if:
+      - condition: state
+        entity_id: lock.front_door_lock_door_lock
+        state: unlocked
+      then:
+      - service: lock.lock
+        metadata: {}
+        data: {}
+        target:
+          entity_id: lock.front_door_lock_door_lock
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 30
+          milliseconds: 0
+        alias: Wait 30 seconds
+      - alias: If Front Door still unlocked, notify
+        if:
+        - condition: state
+          entity_id: lock.front_door_lock_door_lock
+          state: unlocked
+        then:
+        - service: notify.mobile_app_tis_iphone
+          metadata: {}
+          data:
+            message: Front door unlocked!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+        - service: notify.mobile_app_amys_iphone
+          metadata: {}
+          data:
+            message: Front door unlocked!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+  - alias: If the garage door is open, then attempt to close it and if that fails,
+      notify
+    if:
+    - condition: state
+      entity_id: cover.garage_door
+      state: open
+    then:
+    - service: cover.close_cover
+      metadata: {}
+      data: {}
+      target:
+        entity_id: cover.garage_door
+    - delay:
+        hours: 0
+        minutes: 1
+        seconds: 0
+        milliseconds: 0
+    - alias: Notify if the garage door is still open
+      if:
+      - condition: state
+        entity_id: cover.garage_door
+        state: open
+      then:
+      - service: notify.mobile_app_tis_iphone
+        metadata: {}
+        data:
+          message: Garage door is open!
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1
+      - service: notify.mobile_app_amys_iphone
+        metadata: {}
+        data:
+          message: Garage door is open!
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1
+  - alias: If the third car garage door is open notify
+    if:
+    - condition: state
+      entity_id: binary_sensor.third_car_garage_door_opening_3
+      state: 'on'
+    then:
+    - service: notify.mobile_app_tis_iphone
+      metadata: {}
+      data:
+        message: Third car garage door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+    - service: notify.mobile_app_amys_iphone
+      metadata: {}
+      data:
+        message: Third car garage door is open!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+  - service: light.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - light.kitchen_cabinet_lights_left_light_2
+      - light.kitchen_cabinet_lights_right_light_3
+  - service: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.deck_lights
+  - service: light.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: light.living_room_lights
+  mode: single
+- id: '1714824591977'
+  alias: Turn On HVAC Fan to Recirculate Air
+  description: ''
+  trigger:
+  - platform: numeric_state
+    entity_id:
+    - sensor.guest_bedroom_temperature
+    above: sensor.current_thermostat_setpoint
+    for:
+      hours: 0
+      minutes: 5
+      seconds: 0
+  - platform: numeric_state
+    entity_id:
+    - sensor.master_bedroom_temperature
+    above: sensor.current_thermostat_setpoint
+    for:
+      hours: 0
+      minutes: 5
+      seconds: 0
+  - platform: numeric_state
+    entity_id:
+    - sensor.daylans_bedroom_temperature
+    above: sensor.current_thermostat_setpoint
+    for:
+      hours: 0
+      minutes: 5
+      seconds: 0
+  - platform: state
+    entity_id:
+    - alarm_control_panel.abode_alarm
+    to: armed_away
+    for:
+      hours: 0
+      minutes: 45
+      seconds: 0
+  condition:
+  - condition: and
+    conditions:
+    - condition: state
+      entity_id: climate.thermostat
+      attribute: hvac_action
+      state: idle
+    - condition: state
+      entity_id: sensor.current_thermostat_fan_state
+      state: 'off'
+      for:
+        hours: 0
+        minutes: 30
+        seconds: 0
+    - condition: state
+      entity_id: climate.thermostat
+      enabled: true
+      state: cool
+  action:
+  - service: climate.set_fan_mode
+    target:
+      entity_id: climate.thermostat
+    data:
+      fan_mode: 'on'
+  mode: single
+- id: '1715649661226'
+  alias: Turn Off HVAC Fan Recirculation
+  description: Sets the thermostat's fan mode back to auto after 15 minutes of the
+    fan running
+  trigger:
+  - platform: state
+    entity_id:
+    - climate.thermostat
+    attribute: fan_mode
+    to: 'on'
+    for:
+      hours: 0
+      minutes: 30
+      seconds: 0
+  - platform: state
+    entity_id:
+    - climate.thermostat
+    attribute: hvac_action
+    to: cooling
+  condition: []
+  action:
+  - service: climate.set_fan_mode
+    target:
+      entity_id: climate.thermostat
+    data:
+      fan_mode: auto
+  mode: single

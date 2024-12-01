@@ -1,0 +1,15 @@
+- sensor:
+  - name: "Current Thermostat Setpoint"
+    unit_of_measurement: "ºF"
+    state: >
+        {{ state_attr('climate.thermostat','temperature') }}
+        
+- sensor:
+  - name: "Current Thermostat Fan Mode"
+    state: >
+        {{ state_attr('climate.thermostat','fan_mode') }}
+        
+- sensor:
+  - name: "Current Thermostat Fan State"
+    state: >
+        {{ state_attr('climate.thermostat','fan') }}

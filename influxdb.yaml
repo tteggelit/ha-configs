@@ -1,0 +1,56 @@
+  api_version: 2
+  ssl: false
+  host: influxdb.home.daleggetts.com
+  port: 8086
+  token: !secret influxdb_token
+  organization: "ff8078c5db2d9f16"
+  bucket: "default"
+  tags:
+    source: HA
+  tags_attributes:
+    - friendly_name
+  default_measurement: units
+  exclude:
+    entities:
+      - binary_sensor.remote_ui
+      - sensor.amys_iphone_activity
+      - sensor.front_info_2
+      - sensor.hacs
+      - zone.home
+    entity_globs:
+      - sensor.*_bssid
+      - sensor.*_connection_type
+      - sensor.*_identify
+      - sensor.*_info
+      - sensor.*_last_update_trigger
+      - sensor.*_last_seen
+      - sensor.*_node_status
+      - sensor.*_sim_*
+      - sensor.*_ssid
+      - switch.*_event_stream
+      - switch.*_live_stream
+    domains:
+      - alarm_control_panel
+      - button
+      - calendar
+      - camera
+      - cover
+      - event
+      - media_player
+      - number
+      - select
+      - todo
+      - tts
+      - update
+      - person
+  include:
+    domains:
+      - binary_sensor
+      - climate
+      - light
+      - sensor
+      - switch
+      - sun
+      - vacuum
+      - water_heater
+      - weather

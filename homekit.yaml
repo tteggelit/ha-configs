@@ -1,0 +1,63 @@
+- name: Main HASS Bridge
+  port: 21063
+  filter:
+    include_domains:
+      - alarm_control_panel
+      - light
+      - media_player
+      - switch
+      - vacuum
+    exclude_domains:
+      - camera
+    exclude_entities:
+      - switch.auto_away
+      - switch.auto_standby
+      - light.driveway_light
+      - light.front_light
+      - light.right_side_light
+      - media_player.aidan_s_bedroom_speaker
+      - media_player.daylan_s_bedroom_speaker
+      - media_player.living_room_speaker
+      - media_player.playroom_speaker
+    exclude_entity_globs:
+      - binary_sensor.*_occupancy
+      - light.*_pathlight_*
+      - light.*_switch_basic
+      - switch.*_motion_*
+      - switch.*_siren
+      - switch.*_stream
+  entity_config:
+    alarm_control_panel.abode_alarm:
+      code: !secret abode_alarm_code
+
+- name: Amy HASS Bridge
+  port: 21064
+  filter:
+    include_domains:
+      - alarm_control_panel
+      - light
+      - media_player
+      - switch
+      - vacuum
+    exclude_domains:
+      - camera
+    exclude_entities:
+      - switch.auto_away
+      - switch.auto_standby
+      - light.driveway_light
+      - light.front_light
+      - light.right_side_light
+      - media_player.aidan_s_bedroom_speaker
+      - media_player.daylan_s_bedroom_speaker
+      - media_player.living_room_speaker
+      - media_player.playroom_speaker
+    exclude_entity_globs:
+      - binary_sensor.*_occupancy
+      - light.*_pathlight_*
+      - light.*_switch_basic
+      - switch.*_motion_*
+      - switch.*_siren
+      - switch.*_stream
+  entity_config:
+    alarm_control_panel.abode_alarm:
+      code: !secret abode_alarm_code

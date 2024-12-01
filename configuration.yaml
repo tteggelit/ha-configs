@@ -1,0 +1,43 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+homeassistant:
+  packages: !include_dir_named packages
+#  name: Home
+#  latitude: !secret home_latitude
+#  longitude: !secret home_longitude
+#  elevation: !secret home_elevation
+#  unit_system: metric
+#  time_zone: Europe/London
+#  internal_url: !secret internal_url
+#  customize: !include customize.yaml
+#  customize_glob: !include customize_glob.yaml
+  
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+http:
+  ssl_certificate: /ssl/etc/letsencrypt/live/home.daleggetts.com/fullchain.pem
+  ssl_key: /ssl/etc/letsencrypt/live/home.daleggetts.com/privkey.pem
+
+# Standard HomeKit Bridge
+homekit: !include homekit.yaml
+
+# Templates
+template: !include templates.yaml
+
+# InfluxDB
+influxdb: !include influxdb.yaml
+
+bluetooth:
+
+vizio:
+  - host: "192.168.86.240:7345"
+    access_token: Zxplm8rji9
+

@@ -1,0 +1,254 @@
+# This will allow several functions including a persistent pop-up notification on your HA front end, a notification to whichever notify service you use (I’m using Pushbullet in this example), and, if you use another custom component (https://community.home-assistant.io/t/echo-devices-alexa-as-media-player-testers-needed/58639), it will also trigger an announcement to all of your Echo devices.
+# 
+# You next need to find either your NWS Zone ID or County ID. It is better to use both ID's here.
+# 
+# You can find your Zone or County ID by going to https://alerts.weather.gov/, scroll down to your state and click on the “zone list” and/or "county list" then look for the entry for your county.
+# 
+# Once you have your desired ID you create a sensor, replacing my id (INZ009, INC033) with yours. The ID is case sensitive!
+# 
+# Then when you have your ID's, enter them into the configuration below.
+# 
+# Here are all the sections required in the configuration.yaml:
+
+# ILZ030
+# ILC093
+# PKZ816
+# FLC027
+
+rest:
+  - resource: https://api.weather.gov/alerts/active/count
+    scan_interval: 60
+    headers:
+      User-Agent: (ti@daleggetts.com, hass.home.daleggetts.com)
+      Accept: application/ld+json
+    sensor:
+      - name: NWS Alert Count
+        value_template: >
+          {% if value_json is defined and value_json.zones.ILZ030 is defined %}
+            {{ value_json.zones.ILZ030 }}
+          {% elif value_json is defined and value_json.zones.ILC093 is defined %}
+            {{ value_json.zones.ILC093 }}
+          {% else %}
+            0
+          {% endif %}
+  - resource: https://api.weather.gov/alerts/active?zone=ILZ030,ILC093
+    scan_interval: 60
+    headers:
+      User-Agent: (ti@daleggetts.com, hass.home.daleggetts.com)
+      Accept: application/geo+json
+    sensor:
+      - name: NWS Alert Event 1
+        value_template: >
+          {% if value_json.features[0] is defined %}
+            {{ value_json['features'][0]['properties'].event }}
+          {% else %}
+            None
+          {% endif %}
+        json_attributes_path: "$.features[0].properties"
+        json_attributes:
+          - effective
+          - onset
+          - expires
+          - ends
+          - status
+          - severity
+          - certainty
+          - urgency
+          - description
+          - areaDesc
+      - name: NWS Alert Event 2
+        value_template: >
+          {% if value_json.features[1] is defined %}
+            {{ value_json['features'][1]['properties'].event }}
+          {% else %}
+            None
+          {% endif %}
+        json_attributes_path: "$.features[1].properties"
+        json_attributes:
+          - effective
+          - onset
+          - expires
+          - ends
+          - status
+          - severity
+          - certainty
+          - urgency
+          - description
+          - areaDesc
+      - name: NWS Alert Event 3
+        value_template: >
+          {% if value_json.features[2] is defined %}
+            {{ value_json['features'][2]['properties'].event }}
+          {% else %}
+            None
+          {% endif %}
+        json_attributes_path: "$.features[2].properties"
+        json_attributes:
+          - effective
+          - onset
+          - expires
+          - ends
+          - status
+          - severity
+          - certainty
+          - urgency
+          - description
+          - areaDesc
+      - name: NWS Alert Event 4
+        value_template: >
+          {% if value_json.features[3] is defined %}
+            {{ value_json['features'][3]['properties'].event }}
+          {% else %}
+            None
+          {% endif %}
+        json_attributes_path: "$.features[3].properties"
+        json_attributes:
+          - effective
+          - onset
+          - expires
+          - ends
+          - status
+          - severity
+          - certainty
+          - urgency
+          - description
+          - areaDesc
+
+automation:
+  - alias: 'Clear NWS Alert Pop Up'
+    triggers:
+      - trigger: state
+        entity_id: sensor.nws_alert_count
+        to: '0'
+    actions:
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: "nws_alert_1"
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: "nws_alert_2"
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: "nws_alert_3"
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: "nws_alert_4"
+  - alias: 'NWS Alert Pop Up 1'
+    triggers:
+      - trigger: state
+        entity_id: sensor.nws_alert_count
+    conditions:
+      - condition: numeric_state
+        entity_id: sensor.nws_alert_count
+        above: 0
+    actions:
+        ## Create new persistant notifications in the UI for new alert
+        #  and notify mobile devices appropriately.
+      - parallel:    
+        - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.nws_alert_event_1
+                state: None
+          then:
+            - parallel:
+              - action: persistent_notification.create
+                metadata: {}
+                data:
+                  notification_id: nws_alert_1
+                  title: >
+                    {{ states.sensor.nws_alert_event_1.state }}
+                  message: >
+                    {{ state_attr('sensor.nws_alert_event_1', 'description') }}
+              - if:
+                - condition: time
+                  after: "05:30:00"
+                  before: "22:00:00"
+                then:
+                  - parallel:
+                    - action: notify.mobile_app_tis_iphone
+                      metadata: {}
+                      data:
+                        message: >
+                          {{ state_attr('sensor.nws_alert_event_1', 'description') }}
+                        data:
+                          push:
+                            sound:
+                              name: default
+                              critical: 1
+                              volume: 1
+                    - action: tts.speak
+                      target:
+                        entity_id: tts.home_assistant_cloud
+                      data:
+                        media_player_entity_id: media_player.living_room_speaker
+                        message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_1', 'severity') }}  weather alert has been issued. 
+                                  The National Weather Service has issued a {{ states.sensor.nws_alert_event_1.state }} for your area. 
+                                  It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_1', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
+                                  {{ as_timestamp(state_attr('sensor.nws_alert_event_1', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
+                else:
+                  - action: notify.mobile_app_tis_iphone
+                    metadata: {}
+                    data:
+                      message: >
+                        {{ state_attr('sensor.nws_alert_event_1', 'description') }}
+                      data:
+                        push:
+                          sound:
+                            name: default
+                            critical: 1
+                            volume: 0
+        - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.nws_alert_event_2
+                state: None
+          then:
+            - action: persistent_notification.create
+              metadata: {}
+              data:
+                notification_id: nws_alert_2
+                title: >
+                  {{ states.sensor.nws_alert_event_2.state }}
+                message: >
+                  {{ state_attr('sensor.nws_alert_event_2', 'description') }}
+        - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.nws_alert_event_3
+                state: None
+          then:
+            - action: persistent_notification.create
+              metadata: {}
+              data:
+                notification_id: nws_alert_3
+                title: >
+                  {{ states.sensor.nws_alert_event_3.state }}
+                message: >
+                  {{ state_attr('sensor.nws_alert_event_3', 'description') }}
+        - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.nws_alert_event_4
+                state: None
+          then:
+            - action: persistent_notification.create
+              metadata: {}
+              data:
+                notification_id: nws_alert_4
+                title: >
+                  {{ states.sensor.nws_alert_event_4.state }}
+                message: >
+                  {{ state_attr('sensor.nws_alert_event_4', 'description') }}
+          
+# I created two announcements so that a minor event won't wake you nup in the middle of the night.
+# 
+# You’ll notice I repeat the announcement twice in case the first announcement doesn’t wake you up.
+# 
+# And I haven’t worked out the volume setting part yet. If anyone has any working solutions feel free to let me know.
+# 
+# The script above generates a persistent notification pop-up.

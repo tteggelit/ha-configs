@@ -1,0 +1,118 @@
+- id: '1703857920026'
+  name: Normal Cabinet Lights
+  entities:
+    light.kitchen_cabinet_lights_left_light_2:
+      min_color_temp_kelvin: 2000
+      max_color_temp_kelvin: 6535
+      min_mireds: 153
+      max_mireds: 500
+      supported_color_modes:
+      - color_temp
+      - xy
+      color_mode: xy
+      brightness: 76
+      color_temp_kelvin:
+      color_temp:
+      hs_color:
+      - 308.125
+      - 37.647
+      rgb_color:
+      - 255
+      - 159
+      - 242
+      xy_color:
+      - 0.371
+      - 0.239
+      off_with_transition: false
+      off_brightness:
+      friendly_name: Kitchen Cabinet Lights - Left Light
+      supported_features: 40
+      state: 'on'
+    light.kitchen_cabinet_lights_right_light_3:
+      min_color_temp_kelvin: 2000
+      max_color_temp_kelvin: 6535
+      min_mireds: 153
+      max_mireds: 500
+      supported_color_modes:
+      - color_temp
+      - xy
+      color_mode: xy
+      brightness: 76
+      color_temp_kelvin:
+      color_temp:
+      hs_color:
+      - 308.125
+      - 37.647
+      rgb_color:
+      - 255
+      - 159
+      - 242
+      xy_color:
+      - 0.371
+      - 0.239
+      off_with_transition: false
+      off_brightness:
+      friendly_name: Kitchen Cabinet Lights - Right Light
+      supported_features: 40
+      state: 'on'
+  icon: mdi:lightbulb-group
+  metadata: {}
+- id: '1703857989383'
+  name: Cooking Lights
+  entities:
+    light.kitchen_cabinet_lights_left_light_2:
+      min_color_temp_kelvin: 2000
+      max_color_temp_kelvin: 6535
+      min_mireds: 153
+      max_mireds: 500
+      supported_color_modes:
+      - color_temp
+      - xy
+      color_mode: color_temp
+      brightness: 254
+      color_temp_kelvin: 5025
+      color_temp: 199
+      hs_color:
+      - 27.028
+      - 18.905
+      rgb_color:
+      - 255
+      - 228
+      - 206
+      xy_color:
+      - 0.371
+      - 0.349
+      off_with_transition: false
+      off_brightness:
+      friendly_name: Kitchen Cabinet Lights - Left Light
+      supported_features: 40
+      state: 'on'
+    light.kitchen_cabinet_lights_right_light_3:
+      min_color_temp_kelvin: 2000
+      max_color_temp_kelvin: 6535
+      min_mireds: 153
+      max_mireds: 500
+      supported_color_modes:
+      - color_temp
+      - xy
+      color_mode: color_temp
+      brightness: 254
+      color_temp_kelvin: 5025
+      color_temp: 199
+      hs_color:
+      - 27.028
+      - 18.905
+      rgb_color:
+      - 255
+      - 228
+      - 206
+      xy_color:
+      - 0.371
+      - 0.349
+      off_with_transition: false
+      off_brightness:
+      friendly_name: Kitchen Cabinet Lights - Right Light
+      supported_features: 40
+      state: 'on'
+  icon: mdi:lightbulb-group
+  metadata: {}

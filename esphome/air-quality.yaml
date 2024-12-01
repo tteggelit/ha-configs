@@ -1,0 +1,32 @@
+esphome:
+  name: air-quality
+  friendly_name: Air Quality
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "uCVfalWiHUNqWEN+zOhVFYsLWGit7Ub/IdMQ07idF1A="
+
+ota:
+  - platform: esphome
+    password: "99667b85732e46d01ec3c76e2e7cac0a"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Air-Quality Fallback Hotspot"
+    password: "ONSAAnCs2ZbD"
+
+captive_portal:
+    

@@ -1,0 +1,15 @@
+.HA_VERSION
+.cloud
+.storage
+*.bak
+*.db*
+*.log*
+**/*.swp
+**/__pycache__
+**/trash
+Abode
+custom_components
+deps
+image
+secrets.yaml
+tts
