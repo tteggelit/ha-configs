@@ -1,17 +1,22 @@
-# This will allow several functions including a persistent pop-up notification on your HA front end, a notification to whichever notify service you use (I’m using Pushbullet in this example), and, if you use another custom component (https://community.home-assistant.io/t/echo-devices-alexa-as-media-player-testers-needed/58639), it will also trigger an announcement to all of your Echo devices.
+# This package is based off of https://gist.github.com/finity69x2/2b8336429008e9e783bdbf70905c9f6c
+#
+# This will allow several functions including a persistent pop-up notification on your HA front end, a notification to whichever notify service you use (I’m using just a mobile device notification in this example), and the TTS integration
 # 
 # You next need to find either your NWS Zone ID or County ID. It is better to use both ID's here.
 # 
 # You can find your Zone or County ID by going to https://alerts.weather.gov/, scroll down to your state and click on the “zone list” and/or "county list" then look for the entry for your county.
 # 
-# Once you have your desired ID you create a sensor, replacing my id (INZ009, INC033) with yours. The ID is case sensitive!
+# Once you have your desired ID you create a sensor, replacing my id (ILZ030, ILC093) with yours. The ID is case sensitive!
 # 
 # Then when you have your ID's, enter them into the configuration below.
 # 
 # Here are all the sections required in the configuration.yaml:
 
+# These are my Zone and County IDs
 # ILZ030
 # ILC093
+#
+# These are some Zones and Counties that might have active alerts (for testing)
 # PKZ816
 # FLC027
 
