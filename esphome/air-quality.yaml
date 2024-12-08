@@ -7,6 +7,58 @@ esp32:
   framework:
     type: arduino
 
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+  id: bus_a
+
+sensor:
+  - platform: pmsa003i
+    pm_1_0:
+      name: "Studio PM1.0"
+    pm_2_5:
+      name: "Studio PM2.5"
+    pm_10_0:
+      name: "Studio PM10.0"
+    pmc_0_3:
+      name: "Studio PMC >0.3µm"
+    pmc_0_5:
+      name: "Studio PMC >0.5µm"
+    pmc_1_0:
+      name: "Studio PMC >1µm"
+    pmc_2_5:
+      name: "Studio PMC >2.5µm"
+    pmc_5_0:
+      name: "Studio PMC >5µm"
+    pmc_10_0:
+      name: "Studio PMC >10µm"
+    update_interval: 60s
+  - platform: sgp30
+    eco2:
+      name: "Stduio eCO2"
+      accuracy_decimals: 1
+    tvoc:
+      name: "Studio TVOC"
+      accuracy_decimals: 1
+    baseline:
+      eco2_baseline: 0x9509
+      tvoc_baseline: 0x8fce
+    compensation: 
+      humidity_source: esphome_studio_humidity
+      temperature_source: esphome_studio_temperature
+    store_baseline: yes
+    update_interval: 60s
+  - platform: aht10
+    variant: AHT10
+    temperature:
+      name: "Studio Temperature"
+      id: "esphome_studio_temperature"
+    humidity:
+      name: "Studio Humidity"
+      id: "esphome_studio_humidity"
+    update_interval: 60s
+    
 # Enable logging
 logger:
 
