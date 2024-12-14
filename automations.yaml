@@ -202,6 +202,7 @@
       - switch.studio_window_light_outlet_switch
       - switch.loft_window_lights_outlet_switch_2
       - switch.front_decorations
+      - switch.living_room_smart_plug_2_switch
     action: switch.turn_off
   mode: single
 - id: '1703648655388'
@@ -510,32 +511,31 @@
 - id: '1711215722258'
   alias: Alarm Away Actions
   description: Check various states if the house alarm is set to away.
-  trigger:
-  - platform: state
-    entity_id:
+  triggers:
+  - entity_id:
     - alarm_control_panel.abode_alarm
     to: armed_away
-  condition: []
-  action:
-  - service: climate.set_preset_mode
-    metadata: {}
+    trigger: state
+  conditions: []
+  actions:
+  - metadata: {}
     data:
       preset_mode: away_indefinitely
     target:
       entity_id: climate.thermostat
-  - service: alarm_control_panel.alarm_arm_away
-    metadata: {}
+    action: climate.set_preset_mode
+  - metadata: {}
     data: {}
     target:
       entity_id: alarm_control_panel.ring_location_mode
+    action: alarm_control_panel.alarm_arm_away
   - alias: If Front Door is open, then notify, otherwise check if it's locked
     if:
     - condition: state
       entity_id: binary_sensor.front_door_sensor
       state: 'on'
     then:
-    - service: notify.mobile_app_tis_iphone
-      metadata: {}
+    - metadata: {}
       data:
         message: Front door is open!
         data:
@@ -544,8 +544,8 @@
               name: default
               critical: 1
               volume: 1
-    - service: notify.mobile_app_amys_iphone
-      data:
+      action: notify.mobile_app_tis_iphone
+    - data:
         message: Front door is open!
         data:
           push:
@@ -553,6 +553,7 @@
               name: default
               critical: 1
               volume: 1
+      action: notify.mobile_app_amys_iphone
     else:
     - alias: If the front door is unlocked, then attempt to lock it and notify if
         locking fails
@@ -561,11 +562,11 @@
         entity_id: lock.front_door_lock_door_lock
         state: unlocked
       then:
-      - service: lock.lock
-        metadata: {}
+      - metadata: {}
         data: {}
         target:
           entity_id: lock.front_door_lock_door_lock
+        action: lock.lock
       - delay:
           hours: 0
           minutes: 0
@@ -578,8 +579,7 @@
           entity_id: lock.front_door_lock_door_lock
           state: unlocked
         then:
-        - service: notify.mobile_app_tis_iphone
-          metadata: {}
+        - metadata: {}
           data:
             message: Front door unlocked!
             data:
@@ -588,8 +588,8 @@
                   name: default
                   critical: 1
                   volume: 1
-        - service: notify.mobile_app_amys_iphone
-          data:
+          action: notify.mobile_app_tis_iphone
+        - data:
             message: Front door is open!
             data:
               push:
@@ -597,6 +597,7 @@
                   name: default
                   critical: 1
                   volume: 1
+          action: notify.mobile_app_amys_iphone
   - alias: If the garage door is open, then attempt to close it and if that fails,
       notify
     if:
@@ -604,11 +605,11 @@
       entity_id: cover.garage_door
       state: open
     then:
-    - service: cover.close_cover
-      metadata: {}
+    - metadata: {}
       data: {}
       target:
         entity_id: cover.garage_door
+      action: cover.close_cover
     - delay:
         hours: 0
         minutes: 1
@@ -620,8 +621,7 @@
         entity_id: cover.garage_door
         state: open
       then:
-      - service: notify.mobile_app_tis_iphone
-        metadata: {}
+      - metadata: {}
         data:
           message: Garage door is open!
           data:
@@ -630,8 +630,8 @@
                 name: default
                 critical: 1
                 volume: 1
-      - service: notify.mobile_app_amys_iphone
-        data:
+        action: notify.mobile_app_tis_iphone
+      - data:
           message: Garage door is open!
           data:
             push:
@@ -639,6 +639,7 @@
                 name: default
                 critical: 1
                 volume: 1
+        action: notify.mobile_app_amys_iphone
   - alias: If the 3rd car garage door is open, then attempt to close it and if that
       fails, notify
     if:
@@ -646,8 +647,7 @@
       entity_id: binary_sensor.third_car_garage_door_opening
       state: 'on'
     then:
-    - service: notify.mobile_app_tis_iphone
-      metadata: {}
+    - metadata: {}
       data:
         message: Third car garage door is open!
         data:
@@ -656,8 +656,8 @@
               name: default
               critical: 1
               volume: 1
-    - service: notify.mobile_app_amys_iphone
-      data:
+      action: notify.mobile_app_tis_iphone
+    - data:
         message: Third car garage door is open!
         data:
           push:
@@ -665,64 +665,77 @@
               name: default
               critical: 1
               volume: 1
+      action: notify.mobile_app_amys_iphone
+  - action: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.christmas_tree_switch_3
   mode: single
 - id: '1711216712567'
   alias: Alarm Disarmed Actions
   description: Actions to run when the alarm is disarmed
-  trigger:
-  - platform: state
-    entity_id:
+  triggers:
+  - entity_id:
     - alarm_control_panel.abode_alarm
     to: disarmed
-  condition: []
-  action:
+    trigger: state
+  conditions: []
+  actions:
   - if:
     - condition: sun
       before: sunrise
     then:
-    - service: scene.turn_on
-      metadata: {}
+    - metadata: {}
       target:
         entity_id: scene.normal_cabinet_lights
+      action: scene.turn_on
+      data: {}
     alias: Turn on cabinet lights if before sunrise
-  - service: climate.set_preset_mode
-    metadata: {}
+  - metadata: {}
     data:
       preset_mode: home
     target:
       entity_id: climate.thermostat
-  - service: alarm_control_panel.alarm_disarm
-    metadata: {}
+    action: climate.set_preset_mode
+  - metadata: {}
     data: {}
     target:
       entity_id: alarm_control_panel.ring_location_mode
+    action: alarm_control_panel.alarm_disarm
+  - action: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id:
+      - switch.christmas_tree_switch_3
+      - switch.living_room_smart_plug_2_switch
   mode: single
 - id: '1711921755033'
   alias: Alarm Home Actions
   description: Check various states if the house alarm is set to home.
-  trigger:
-  - platform: state
-    entity_id:
+  triggers:
+  - entity_id:
     - alarm_control_panel.abode_alarm
     to: armed_home
-  condition: []
-  action:
-  - service: ecobee.resume_program
-    data:
+    trigger: state
+  conditions: []
+  actions:
+  - data:
       entity_id: climate.thermostat
-  - service: alarm_control_panel.alarm_arm_home
-    metadata: {}
+    action: ecobee.resume_program
+  - metadata: {}
     data: {}
     target:
       entity_id: alarm_control_panel.ring_location_mode
+    action: alarm_control_panel.alarm_arm_home
   - alias: If Front Door is open, then notify, otherwise check if it's locked
     if:
     - condition: state
       entity_id: binary_sensor.front_door_sensor
       state: 'on'
     then:
-    - service: notify.mobile_app_tis_iphone
-      metadata: {}
+    - metadata: {}
       data:
         message: Front door is open!
         data:
@@ -731,8 +744,8 @@
               name: default
               critical: 1
               volume: 1
-    - service: notify.mobile_app_amys_iphone
-      metadata: {}
+      action: notify.mobile_app_tis_iphone
+    - metadata: {}
       data:
         message: Front door is open!
         data:
@@ -741,6 +754,7 @@
               name: default
               critical: 1
               volume: 1
+      action: notify.mobile_app_amys_iphone
     else:
     - alias: If the front door is unlocked, then attempt to lock it and notify if
         locking fails
@@ -749,11 +763,11 @@
         entity_id: lock.front_door_lock_door_lock
         state: unlocked
       then:
-      - service: lock.lock
-        metadata: {}
+      - metadata: {}
         data: {}
         target:
           entity_id: lock.front_door_lock_door_lock
+        action: lock.lock
       - delay:
           hours: 0
           minutes: 0
@@ -766,8 +780,7 @@
           entity_id: lock.front_door_lock_door_lock
           state: unlocked
         then:
-        - service: notify.mobile_app_tis_iphone
-          metadata: {}
+        - metadata: {}
           data:
             message: Front door unlocked!
             data:
@@ -776,8 +789,8 @@
                   name: default
                   critical: 1
                   volume: 1
-        - service: notify.mobile_app_amys_iphone
-          metadata: {}
+          action: notify.mobile_app_tis_iphone
+        - metadata: {}
           data:
             message: Front door unlocked!
             data:
@@ -786,6 +799,7 @@
                   name: default
                   critical: 1
                   volume: 1
+          action: notify.mobile_app_amys_iphone
   - alias: If the garage door is open, then attempt to close it and if that fails,
       notify
     if:
@@ -793,11 +807,11 @@
       entity_id: cover.garage_door
       state: open
     then:
-    - service: cover.close_cover
-      metadata: {}
+    - metadata: {}
       data: {}
       target:
         entity_id: cover.garage_door
+      action: cover.close_cover
     - delay:
         hours: 0
         minutes: 1
@@ -809,8 +823,7 @@
         entity_id: cover.garage_door
         state: open
       then:
-      - service: notify.mobile_app_tis_iphone
-        metadata: {}
+      - metadata: {}
         data:
           message: Garage door is open!
           data:
@@ -819,8 +832,8 @@
                 name: default
                 critical: 1
                 volume: 1
-      - service: notify.mobile_app_amys_iphone
-        metadata: {}
+        action: notify.mobile_app_tis_iphone
+      - metadata: {}
         data:
           message: Garage door is open!
           data:
@@ -829,14 +842,14 @@
                 name: default
                 critical: 1
                 volume: 1
+        action: notify.mobile_app_amys_iphone
   - alias: If the third car garage door is open notify
     if:
     - condition: state
       entity_id: binary_sensor.third_car_garage_door_opening_3
       state: 'on'
     then:
-    - service: notify.mobile_app_tis_iphone
-      metadata: {}
+    - metadata: {}
       data:
         message: Third car garage door is open!
         data:
@@ -845,8 +858,8 @@
               name: default
               critical: 1
               volume: 1
-    - service: notify.mobile_app_amys_iphone
-      metadata: {}
+      action: notify.mobile_app_tis_iphone
+    - metadata: {}
       data:
         message: Third car garage door is open!
         data:
@@ -855,23 +868,34 @@
               name: default
               critical: 1
               volume: 1
-  - service: light.turn_off
+      action: notify.mobile_app_amys_iphone
+  - action: media_player.turn_off
     metadata: {}
+    data: {}
+    target:
+      entity_id: media_player.living_room_tv
+  - action: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.christmas_tree_switch_3
+  - metadata: {}
     data: {}
     target:
       entity_id:
       - light.kitchen_cabinet_lights_left_light_2
       - light.kitchen_cabinet_lights_right_light_3
-  - service: switch.turn_off
-    metadata: {}
+    action: light.turn_off
+  - metadata: {}
     data: {}
     target:
       entity_id: switch.deck_lights
-  - service: light.turn_off
-    metadata: {}
+    action: switch.turn_off
+  - metadata: {}
     data: {}
     target:
       entity_id: light.living_room_lights
+    action: light.turn_off
   mode: single
 - id: '1714824591977'
   alias: Turn On HVAC Fan to Recirculate Air
