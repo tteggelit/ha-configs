@@ -6,14 +6,14 @@
 # 
 # You can find your Zone or County ID by going to https://alerts.weather.gov/, scroll down to your state and click on the “zone list” and/or "county list" then look for the entry for your county.
 # 
-# Once you have your desired ID you create a sensor, replacing my id (ILZ030, ILC093) with yours. The ID is case sensitive!
+# Once you have your desired ID you create a sensor, replacing my id (ILZ020, ILC093) with yours. The ID is case sensitive!
 # 
 # Then when you have your ID's, enter them into the configuration below.
 # 
 # Here are all the sections required in the configuration.yaml:
 
 # These are my Zone and County IDs
-# ILZ030
+# ILZ020
 # ILC093
 #
 # These are some Zones and Counties that might have active alerts (for testing)
@@ -29,14 +29,14 @@ rest:
     sensor:
       - name: 'NWS Alert Count'
         value_template: >
-          {% if value_json is defined and value_json.zones.ILZ030 is defined %}
-            {{ value_json.zones.ILZ030 }}
+          {% if value_json is defined and value_json.zones.ILZ020 is defined %}
+            {{ value_json.zones.ILZ020 }}
           {% elif value_json is defined and value_json.zones.ILC093 is defined %}
             {{ value_json.zones.ILC093 }}
           {% else %}
             0
           {% endif %}
-  - resource: https://api.weather.gov/alerts/active?zone=ILZ030,ILC093
+  - resource: https://api.weather.gov/alerts/active?zone=ILZ020,ILC093
     scan_interval: 60
     headers:
       User-Agent: (ti@daleggetts.com, hass.home.daleggetts.com)
