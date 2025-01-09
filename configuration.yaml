@@ -37,7 +37,3 @@ influxdb: !include influxdb.yaml
 
 bluetooth:
 
-vizio:
-  - host: "192.168.86.240:7345"
-    access_token: Zxplm8rji9
-
