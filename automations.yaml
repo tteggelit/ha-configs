@@ -670,7 +670,9 @@
     metadata: {}
     data: {}
     target:
-      entity_id: switch.christmas_tree_switch_3
+      entity_id:
+      - switch.christmas_tree_switch_3
+      - switch.living_room_smart_plug_4_switch
   mode: single
 - id: '1711216712567'
   alias: Alarm Disarmed Actions
@@ -710,6 +712,7 @@
       entity_id:
       - switch.christmas_tree_switch_3
       - switch.living_room_smart_plug_2_switch
+      - switch.living_room_smart_plug_4_switch
   mode: single
 - id: '1711921755033'
   alias: Alarm Home Actions
@@ -878,7 +881,10 @@
     metadata: {}
     data: {}
     target:
-      entity_id: switch.christmas_tree_switch_3
+      entity_id:
+      - switch.christmas_tree_switch_3
+      - switch.living_room_smart_plug_4_switch
+      - switch.living_room_smart_plug_2_switch
   - metadata: {}
     data: {}
     target:
