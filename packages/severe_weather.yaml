@@ -451,13 +451,25 @@ automation:
                         else:
                           - action: script.critical_nws_mobile_notification_1
                 else:
-                  - action: script.critical_nws_mobile_notification_1
+                  - if:
+                    - condition: not
+                      conditions:
+                        - condition: template
+                          value_template: >
+                            {{ is_state_attr('sensor.nws_alert_event_1', 'severity', 'Unknown') }}
+                    then:
+                      - action: script.critical_nws_mobile_notification_1
         - if:
-          - condition: not
+          - condition: and
             conditions:
-              - condition: state
-                entity_id: sensor.nws_alert_event_2
-                state: None
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: sensor.nws_alert_event_2
+                  state: None
+            - condition: template
+              value_template: >
+                {{ state_attr('sensor.nws_alert_event_2', 'description') != state_attr('sensor.nws_alert_event_1', 'description') }}
           then:
             - parallel:
               - action: persistent_notification.create
@@ -504,8 +516,26 @@ automation:
                         else:
                           - action: script.critical_nws_mobile_notification_2
                 else:
-                  - action: script.critical_nws_mobile_notification_2
+                  - if:
+                    - condition: not
+                      conditions:
+                        - condition: template
+                          value_template: >
+                            {{ is_state_attr('sensor.nws_alert_event_2', 'severity', 'Unknown') }}
+                    then:
+                      - action: script.critical_nws_mobile_notification_2
         - if:
+          - condition: and
+            conditions:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: sensor.nws_alert_event_3
+                  state: None
+            - condition: template
+              value_template: >
+                {{ state_attr('sensor.nws_alert_event_3', 'description') != state_attr('sensor.nws_alert_event_1', 'description') or
+                   state_attr('sensor.nws_alert_event_3', 'description') != state_attr('sensor.nws_alert_event_2', 'description') }}
           - condition: not
             conditions:
               - condition: state
@@ -557,13 +587,27 @@ automation:
                         else:
                           - action: script.critical_nws_mobile_notification_3
                 else:
-                  - action: script.critical_nws_mobile_notification_3
+                  - if:
+                    - condition: not
+                      conditions:
+                        - condition: template
+                          value_template: >
+                            {{ is_state_attr('sensor.nws_alert_event_3', 'severity', 'Unknown') }}
+                    then:
+                      - action: script.critical_nws_mobile_notification_3
         - if:
-          - condition: not
+          - condition: and
             conditions:
-              - condition: state
-                entity_id: sensor.nws_alert_event_4
-                state: None
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: sensor.nws_alert_event_4
+                  state: None
+            - condition: template
+              value_template: >
+                {{ state_attr('sensor.nws_alert_event_4', 'description') != state_attr('sensor.nws_alert_event_1', 'description') or
+                   state_attr('sensor.nws_alert_event_4', 'description') != state_attr('sensor.nws_alert_event_2', 'description') or
+                   state_attr('sensor.nws_alert_event_4', 'description') != state_attr('sensor.nws_alert_event_3', 'description') }}
           then:
             - parallel:
               - action: persistent_notification.create
@@ -610,7 +654,14 @@ automation:
                         else:
                           - action: script.critical_nws_mobile_notification_4
                 else:
-                  - action: script.critical_nws_mobile_notification_4
+                  - if:
+                    - condition: not
+                      conditions:
+                        - condition: template
+                          value_template: >
+                            {{ is_state_attr('sensor.nws_alert_event_4', 'severity', 'Unknown') }}
+                    then:
+                      - action: script.critical_nws_mobile_notification_4
           
 # I created two announcements so that a minor event won't wake you up in the middle of the night.
 # 
