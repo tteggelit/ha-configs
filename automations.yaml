@@ -273,39 +273,41 @@
 - id: '1703714762428'
   alias: Turn On Kitchen Cabinet Lights (Evening)
   description: Turn on kitchen cabinet lights 45 minutes before sunset
-  trigger:
-  - platform: sun
-    event: sunset
+  triggers:
+  - event: sunset
     offset: -00:45:00
-  condition: []
-  action:
-  - service: scene.turn_on
-    target:
+    trigger: sun
+  conditions: []
+  actions:
+  - target:
       entity_id: scene.normal_cabinet_lights
     metadata: {}
+    action: scene.turn_on
+    data: {}
+  - action: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.living_room_side_light_switch
   mode: single
 - id: '1703715453766'
   alias: Turn Off Kitchen Cabinet Lights
   description: Turn off kitchen cabinet lights
-  trigger:
-  - platform: time
-    at: 01:00:00
-  - platform: sun
-    event: sunrise
+  triggers:
+  - at: 01:00:00
+    trigger: time
+  - event: sunrise
     offset: 00:30:00
-  - platform: state
-    entity_id:
-    - alarm_control_panel.abode_alarm
-    to: armed_home
-  condition: []
-  action:
-  - service: light.turn_off
-    metadata: {}
+    trigger: sun
+  conditions: []
+  actions:
+  - metadata: {}
     data: {}
     target:
       entity_id:
       - light.kitchen_cabinet_lights_left_light_2
       - light.kitchen_cabinet_lights_right_light_3
+    action: light.turn_off
   mode: single
 - id: '1704080218841'
   alias: Turn On Pantry Light
@@ -673,6 +675,7 @@
       entity_id:
       - switch.christmas_tree_switch_3
       - switch.living_room_smart_plug_4_switch
+      - switch.living_room_side_light_switch
   mode: single
 - id: '1711216712567'
   alias: Alarm Disarmed Actions
@@ -684,16 +687,24 @@
     trigger: state
   conditions: []
   actions:
-  - if:
+  - alias: Turn on cabinet and living room side lights if it's dark
+    if:
     - condition: sun
       before: sunrise
+      before_offset: +00:30:00
+      after: sunset
+      after_offset: -00:30:00
     then:
     - metadata: {}
       target:
         entity_id: scene.normal_cabinet_lights
       action: scene.turn_on
       data: {}
-    alias: Turn on cabinet lights if before sunrise
+    - action: switch.turn_on
+      metadata: {}
+      data: {}
+      target:
+        entity_id: switch.living_room_side_light_switch
   - metadata: {}
     data:
       preset_mode: home
@@ -711,7 +722,6 @@
     target:
       entity_id:
       - switch.christmas_tree_switch_3
-      - switch.living_room_smart_plug_2_switch
       - switch.living_room_smart_plug_4_switch
   mode: single
 - id: '1711921755033'
@@ -884,7 +894,7 @@
       entity_id:
       - switch.christmas_tree_switch_3
       - switch.living_room_smart_plug_4_switch
-      - switch.living_room_smart_plug_2_switch
+      - switch.living_room_side_light_switch
   - metadata: {}
     data: {}
     target:
@@ -990,4 +1000,19 @@
       entity_id: climate.thermostat
     data:
       fan_mode: auto
+  mode: single
+- id: '1736628413798'
+  alias: Turn Off Living Room Side Light
+  description: Turn off living room side light
+  triggers:
+  - event: sunrise
+    offset: 00:30:00
+    trigger: sun
+  conditions: []
+  actions:
+  - action: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.living_room_side_light_switch
   mode: single
