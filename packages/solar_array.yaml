@@ -1,0 +1,58 @@
+template:
+  - sensor:
+    - name: MP1 Array Outlier Threshold
+      state: >
+        {%- macro stdev(values) %}
+        {%- set ns = namespace(values=[] ) %}
+        {%- set mean = values | average %}
+        {%- for value in values %}
+          {%- set ns.values = ns.values + [ (value - mean)**2 ] %}
+        {%- endfor %}
+        {{ sqrt(ns.values | sum / (ns.values | length)) }}
+        {%- endmacro %}
+        {%- set entities = 'sensor.inverter_532433053771', 'sensor.inverter_532433053813', 'sensor.inverter_532433053814', 'sensor.inverter_532433056955', 'sensor.inverter_532433062314', 'sensor.inverter_532433063804', 'sensor.inverter_532434000648', 'sensor.inverter_532434000683' %}
+        {%- set values = expand(entities) | map(attribute='state') | select('is_number') | map('float') | list %}
+        {%- set sd = stdev(values) | float %}
+        {%- set outlier = (values | average) - 2.5 * sd %}
+        {%- if outlier < 0 %}
+          {%- set outlier = 0 %}
+        {%- endif %}
+        {{ outlier | float }}
+  - sensor:
+    - name: MP2 Array Outlier Threshold
+      state: >
+        {%- macro stdev(values) %}
+        {%- set ns = namespace(values=[] ) %}
+        {%- set mean = values | average %}
+        {%- for value in values %}
+          {%- set ns.values = ns.values + [ (value - mean)**2 ] %}
+        {%- endfor %}
+        {{ sqrt(ns.values | sum / (ns.values | length)) }}
+        {%- endmacro %}
+        {%- set entities = 'sensor.inverter_532433043227', 'sensor.inverter_532433044629', 'sensor.inverter_532433053763', 'sensor.inverter_532433063277', 'sensor.inverter_532433063339', 'sensor.inverter_532433063668', 'sensor.inverter_532433063709', 'sensor.inverter_532434000262', 'sensor.inverter_532434000434', 'sensor.inverter_532434000662', 'sensor.inverter_532434000856', 'sensor.inverter_532434000870', 'sensor.inverter_532434001160', 'sensor.inverter_532434002991' %}
+        {%- set values = expand(entities) | map(attribute='state') | select('is_number') | map('float') | list %}
+        {%- set sd = stdev(values) | float %}
+        {%- set outlier = (values | average) - 2.5 * sd %}
+        {%- if outlier < 0 %}
+          {%- set outlier = 0 %}
+        {%- endif %}
+        {{ outlier | float }}
+  - sensor:
+    - name: MP3 Array Outlier Threshold
+      state: >
+        {%- macro stdev(values) %}
+        {%- set ns = namespace(values=[] ) %}
+        {%- set mean = values | average %}
+        {%- for value in values %}
+          {%- set ns.values = ns.values + [ (value - mean)**2 ] %}
+        {%- endfor %}
+        {{ sqrt(ns.values | sum / (ns.values | length)) }}
+        {%- endmacro %}
+        {%- set entities = 'sensor.inverter_532433063288', 'sensor.inverter_532434000279', 'sensor.inverter_532434000667', 'sensor.inverter_532434000684', 'sensor.inverter_532434001143', 'sensor.inverter_532434001382' %}
+        {%- set values = expand(entities) | map(attribute='state') | select('is_number') | map('float') | list %}
+        {%- set sd = stdev(values) | float %}
+        {%- set outlier = (values | average) - 2.5 * sd %}
+        {%- if outlier < 0 %}
+          {%- set outlier = 0 %}
+        {%- endif %}
+        {{ outlier | float }}
