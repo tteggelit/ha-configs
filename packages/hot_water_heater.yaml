@@ -1,0 +1,81 @@
+automation:
+  - alias: Timed Hot Water Recirculation
+    description: Recirculates hot water every 15 minutes but only while the alarm is
+      disarmed (i.e., someone's home and not sleeping) and not between 1:30am and 4:00am
+    triggers:
+    - entity_id:
+      - binary_sensor.water_heater_recirculation
+      to: 'off'
+      for:
+        hours: 0
+        minutes: 20
+        seconds: 0
+      trigger: state
+    conditions:
+    - condition: and
+      conditions:
+      - condition: time
+        after: 04:00:00
+        before: 01:30:00
+      - condition: numeric_state
+        entity_id: sensor.rinnai_201900685wzd5_water_flow_rate
+        below: 1
+        enabled: true
+      - condition: state
+        entity_id: alarm_control_panel.abode_alarm
+        state: disarmed
+    actions:
+    - data:
+        recirculation_minutes: 5
+      target:
+        entity_id: water_heater.rinnai_201900685wzd5_water_heater
+      action: rinnai.start_recirculation
+    mode: single
+  - alias: Motion Hot Water Recirculation
+    description: Recirculate the hot water when motion is detected in the any of the
+      bathrooms and water hasn't been recirculated in the last 15 minutes
+    trigger:
+    - platform: state
+      entity_id:
+      - binary_sensor.master_bathroom_motion_sensor_motion_2
+      - binary_sensor.downstairs_bathroom_motion_sensor_motion_3
+      to: 'on'
+    condition:
+    - condition: state
+      entity_id: binary_sensor.water_heater_recirculation
+      state: 'off'
+      for:
+        hours: 0
+        minutes: 10
+        seconds: 0
+      enabled: true
+    action:
+    - service: rinnai.start_recirculation
+      data:
+        recirculation_minutes: 5
+      target:
+        entity_id: water_heater.rinnai_201900685wzd5_water_heater
+    mode: single
+  - alias: Recirculate Hot Water After Returning Home
+    description: Recirculate the hot water if we've been away from home for more than
+      30 minutes
+    trigger:
+    - platform: state
+      entity_id:
+      - alarm_control_panel.abode_alarm
+      to: disarmed
+    condition:
+    - condition: state
+      entity_id: binary_sensor.water_heater_recirculation
+      state: 'off'
+      for:
+        hours: 0
+        minutes: 30
+        seconds: 0
+    action:
+    - service: rinnai.start_recirculation
+      target:
+        entity_id: water_heater.rinnai_201900685wzd5_water_heater
+      data:
+        recirculation_minutes: 5
+    mode: single
