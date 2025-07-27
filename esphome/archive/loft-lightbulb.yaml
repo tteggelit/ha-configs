@@ -1,0 +1,20 @@
+substitutions:
+  name: "loft-lightbulb"
+  friendly_name: Loft Lightbulb
+  sub_max_power: '1.0'
+  light_restore_mode: RESTORE_AND_ON
+  
+packages:
+  Kauf.RGBWW: github://KaufHA/kauf-rgbww-bulbs/kauf-bulb.yaml
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false
+api:
+  encryption:
+    key: zjVtIt2Zy6wfFtQeHNkj3muOwA27l7JnibsOEChrE5U=
+
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
