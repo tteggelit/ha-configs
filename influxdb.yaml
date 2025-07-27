@@ -25,6 +25,7 @@
       - sensor.*_last_update_trigger
       - sensor.*_last_seen
       - sensor.*_node_status
+      - sensor.*_pmc_*_m
       - sensor.*_sim_*
       - sensor.*_ssid
       - switch.*_event_stream
