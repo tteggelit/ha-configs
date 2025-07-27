@@ -37,3 +37,12 @@ influxdb: !include influxdb.yaml
 
 bluetooth:
 
+logger:
+  default: warning
+  logs:
+    homeassistant.components.rest: error
+  filters:
+    homeassistant.components.rest:
+      - "JSON result was not a dictionary or list with 0th element a dictionary"
+    homeassistant.helpers.template:
+      - "Template variable error: 'None' has no attribute 'attributes' when rendering '{{ trigger.event.data.new_state.attributes.device_class == \"moisture\" }}'"
