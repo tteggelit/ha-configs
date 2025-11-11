@@ -1,0 +1,64 @@
+substitutions:
+  name: btproxy
+  friendly_name: BT Proxy
+  board: esp32dev
+
+packages:
+  esphome.bluetooth-proxy: github://esphome/bluetooth-proxies/esp32-generic/esp32-generic.yaml@main
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: ${board}
+  framework:
+    type: esp-idf
+  
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret btproxy_api_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+esp32_ble_tracker:
+  scan_parameters:
+    #interval: 1100ms
+    #window: 1100ms
+    active: true
+
+#sensor:
+#  - platform: b_parasite
+#    mac_address: D6:5E:33:3D:4A:AB
+#    humidity:
+#      name: 'Moisture Sensor 1 Air Humidity'
+#    temperature:
+#      name: 'Moisture Sensor 1 Air Temperature'
+#    moisture:
+#      name: 'Moisture Sensor 1 Soil Moisture'
+#    battery_voltage:
+#      name: 'Moisture Sensor 1 Battery Voltage'
+#    illuminance:
+#      name: 'Moisture Sensor 1 Illuminance'
+#  - platform: b_parasite
+#    mac_address: D8:6C:F1:46:39:6B
+#    humidity:
+#      name: 'Moisture Sensor 2 Air Humidity'
+#    temperature:
+#      name: 'Moisture Sensor 2 Air Temperature'
+#    moisture:
+#      name: 'Moisture Sensor 2 Soil Moisture'
+#    battery_voltage:
+#      name: 'Moisture Sensor 2 Battery Voltage'
+#    illuminance:
+#      name: 'Moisture Sensor 2 Illuminance'
+
+bluetooth_proxy:
+  active: true
+  connection_slots: 3

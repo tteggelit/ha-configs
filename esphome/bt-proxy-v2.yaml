@@ -1,0 +1,40 @@
+substitutions:
+  name: btproxy2
+  friendly_name: BT Proxy V2
+  board: esp32-s3-devkitc-1
+  connections: 5
+
+packages:
+  esphome.bluetooth-proxy: github://esphome/bluetooth-proxies/esp32-generic/esp32-generic.yaml@main
+
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: ${board}
+  framework:
+    type: esp-idf
+  
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret btproxy_api_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+esp32_ble_tracker:
+  max_connections: ${connections}
+  scan_parameters:
+    #interval: 1100ms
+    #window: 1100ms
+    active: true
+
+bluetooth_proxy:
+  active: true
+  connection_slots: ${connections}
