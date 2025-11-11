@@ -1,0 +1,193 @@
+###############################################################################
+# Ecobee Humidity Controller for Home Assistant
+# 
+# This integration automatically adjusts your Ecobee thermostat's humidity
+# target based on outdoor temperature to prevent window condensation.
+#
+# SETUP INSTRUCTIONS:
+# 1. Replace 'weather.home' with your actual weather entity ID
+# 2. Replace 'climate.ecobee' with your actual Ecobee thermostat entity ID
+# 3. Adjust temperature thresholds in the template if needed for your climate
+# 4. Add this to your configuration.yaml or create a package file
+# 5. Restart Home Assistant
+###############################################################################
+
+# Input number to allow manual adjustment of humidity offset
+input_number:
+  ecobee_humidity_offset:
+    name: Ecobee Humidity Offset
+    min: -10
+    max: 10
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:water-percent
+    initial: 0
+
+# Template sensor that calculates ideal humidity based on outdoor temp
+template:
+  - sensor:
+      - name: "Ecobee Target Humidity"
+        unique_id: ecobee_target_humidity
+        unit_of_measurement: "%"
+        icon: mdi:water-percent
+        state: >
+          {% set outdoor_temp = state_attr('weather.klot', 'temperature') | float(0) %}
+          {% set offset = states('input_number.ecobee_humidity_offset') | float(0) %}
+          
+          {# Humidity recommendations based on outdoor temperature (°F) #}
+          {# These values prevent condensation on typical double-pane windows #}
+          {% if outdoor_temp > 50 %}
+            {% set base_humidity = 50 %}
+          {% elif outdoor_temp > 40 %}
+            {% set base_humidity = 45 %}
+          {% elif outdoor_temp > 30 %}
+            {% set base_humidity = 40 %}
+          {% elif outdoor_temp > 20 %}
+            {% set base_humidity = 35 %}
+          {% elif outdoor_temp > 10 %}
+            {% set base_humidity = 30 %}
+          {% elif outdoor_temp > 0 %}
+            {% set base_humidity = 25 %}
+          {% elif outdoor_temp > -10 %}
+            {% set base_humidity = 20 %}
+          {% else %}
+            {% set base_humidity = 15 %}
+          {% endif %}
+          
+          {# Apply offset and clamp between 15-50% #}
+          {% set target = base_humidity + offset %}
+          {{ [15, [target, 50] | min] | max | int }}
+        availability: >
+          {{ state_attr('weather.klot', 'temperature') != None }}
+        attributes:
+          outdoor_temperature: >
+            {{ state_attr('weather.klot', 'temperature') }}
+          base_recommendation: >
+            {% set outdoor_temp = state_attr('weather.klot', 'temperature') | float(0) %}
+            {% if outdoor_temp > 50 %}50
+            {% elif outdoor_temp > 40 %}45
+            {% elif outdoor_temp > 30 %}40
+            {% elif outdoor_temp > 20 %}35
+            {% elif outdoor_temp > 10 %}30
+            {% elif outdoor_temp > 0 %}25
+            {% elif outdoor_temp > -10 %}20
+            {% else %}15{% endif %}
+          applied_offset: >
+            {{ states('input_number.ecobee_humidity_offset') }}
+
+# Automation to update Ecobee humidity when target changes
+automation:
+  - id: update_ecobee_humidity
+    alias: "Update Ecobee Humidity Target"
+    description: "Adjusts Ecobee humidity based on outdoor temperature"
+    mode: single
+    trigger:
+      # Trigger when calculated target humidity changes
+      - platform: state
+        entity_id: sensor.ecobee_target_humidity
+        to: ~
+      # Also check every hour in case we missed an update
+      - platform: time_pattern
+        hours: "/1"
+    condition:
+      # Ensure all required entities are available
+      - condition: template
+        value_template: >
+          {{ states('sensor.ecobee_target_humidity') not in ['unavailable', 'unknown', 'none'] }}
+      - condition: template
+        value_template: >
+          {{ states('climate.thermostat_2') not in ['unavailable', 'unknown', 'none'] }}
+      # Only update if the target is different from current setting
+      - condition: template
+        value_template: >
+          {% set current = state_attr('climate.thermostat_2', 'humidity') | int(0) %}
+          {% set target = states('sensor.ecobee_target_humidity') | int(0) %}
+          {{ current != target }}
+    action:
+      - service: humidifier.set_humidity
+        target:
+          entity_id: humidifier.thermostat
+        data:
+          humidity: "{{ states('sensor.ecobee_target_humidity') | int(35) }}"
+      - service: system_log.write
+        data:
+          message: >
+            Ecobee humidity updated to {{ states('sensor.ecobee_target_humidity') | int(35) }}%
+            (Outdoor temp: {{ state_attr('sensor.ecobee_target_humidity', 'outdoor_temperature') }}°F)
+          level: info
+
+  # Optional: Notification when humidity is adjusted
+  - id: notify_ecobee_humidity_change
+    alias: "Notify Ecobee Humidity Change"
+    description: "Send notification when humidity target changes significantly"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.ecobee_target_humidity
+        to: ~
+    condition:
+      # Ensure sensor is available
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
+      - condition: template
+        value_template: >
+          {{ trigger.from_state.state not in ['unavailable', 'unknown', 'none'] }}
+      # Only notify if change is more than 5%
+      - condition: template
+        value_template: >
+          {{ (trigger.to_state.state | int(0) - trigger.from_state.state | int(0)) | abs > 5 }}
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "Ecobee Humidity Adjusted"
+          message: >
+            Humidity target changed from {{ trigger.from_state.state }}% to {{ trigger.to_state.state }}%
+            due to outdoor temperature change ({{ state_attr('sensor.ecobee_target_humidity', 'outdoor_temperature') }}°F)
+
+###############################################################################
+# OPTIONAL: Lovelace Dashboard Card
+# Add this to your dashboard to monitor and adjust humidity settings
+###############################################################################
+# 
+# type: entities
+# title: Ecobee Humidity Control
+# entities:
+#   - entity: sensor.ecobee_target_humidity
+#     name: Target Humidity
+#   - entity: climate.ecobee
+#     attribute: humidity
+#     name: Current Setting
+#   - entity: climate.ecobee
+#     attribute: current_humidity
+#     name: Current Humidity
+#   - type: attribute
+#     entity: sensor.ecobee_target_humidity
+#     attribute: outdoor_temperature
+#     name: Outdoor Temperature
+#   - entity: input_number.ecobee_humidity_offset
+#     name: Manual Adjustment
+# state_color: true
+#
+###############################################################################
+# CELSIUS VERSION (for non-US users)
+# Replace the temperature thresholds with these:
+#
+# {% if outdoor_temp > 10 %}        {# > 50°F #}
+#   {% set base_humidity = 50 %}
+# {% elif outdoor_temp > 4 %}       {# > 40°F #}
+#   {% set base_humidity = 45 %}
+# {% elif outdoor_temp > -1 %}      {# > 30°F #}
+#   {% set base_humidity = 40 %}
+# {% elif outdoor_temp > -7 %}      {# > 20°F #}
+#   {% set base_humidity = 35 %}
+# {% elif outdoor_temp > -12 %}     {# > 10°F #}
+#   {% set base_humidity = 30 %}
+# {% elif outdoor_temp > -18 %}     {# > 0°F #}
+#   {% set base_humidity = 25 %}
+# {% elif outdoor_temp > -23 %}     {# > -10°F #}
+#   {% set base_humidity = 20 %}
+# {% else %}
+#   {% set base_humidity = 15 %}
+# {% endif %}
+###############################################################################
