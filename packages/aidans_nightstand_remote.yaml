@@ -1,3 +1,21 @@
+# This package consists of a script to cycle through RGB and White colors and
+# an automation to process the button events.
+# Here are how the button events are processed:
+# Push Up           - Turn light on
+# Push Down         - Turn lights off
+# Hold Up           - Turn up the brightness to a max of 100%
+# Hold Down         - Turn down the brightness to a min of 3%
+# Push Right / Left - Cycle through RGB and White (warm, cool, bright, daylight) colors
+#
+# You will need to update the automation to reference the right device_id of the
+# remote and what lights you want to control.
+#
+# To get the `device_id` of the remote (assuming ZHA), do the following:
+# 1. Pair the remote as normal with ZHA
+# 2. Once paired, go to Developer Tools and select Events
+# 3. Listen for `zha_event` events
+# 4. Push a button on the remote and you should see an event. Copy the `device_id`
+
 # Scripts
 script:
   cycle_aidans_nightstand_light_color:
