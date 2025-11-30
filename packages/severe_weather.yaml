@@ -8,10 +8,8 @@
 # 
 # Once you have your desired ID you create a sensor, replacing my id (ILZ020, ILC093) with yours. The ID is case sensitive!
 # 
-# Then when you have your ID's, enter them into the configuration below.
+# Then when you have your ID's, enter them using the inputs that are created - input.nws_zone and input.nws_county.
 # 
-# Here are all the sections required in the configuration.yaml:
-
 # These are my Zone and County IDs
 # ILZ020
 # ILC093
@@ -19,38 +17,203 @@
 # These are some Zones and Counties that might have active alerts (for testing)
 # PKZ816
 # FLC027
+#
+# In addition to the zone and county inputs there are several other inputs also created:
+# - input.nws_api_email :
+#   This will be used to set the User-agent for the API calls
+#   *You need to set this appropriately*
+#
+# - input.nws_api_dns : 
+#   This will be used to set the User-agent for the API calls
+#   *You need to set this appropriately*
+#   
+# - input.nws_processed_alerts : 
+#   This is used to track which NWS alerts have been processed to prevent inadvertent duplicate alerts
+#
+# - input.nws_alerts_quiet_modes : 
+#   An input to disable alerting 
+#
+# - input.nws_last_alert : 
+#   The last alert date and time. This is used to prevent rapid, successive alerts
+#
+# - input.nws_alert_count_total : 
+#   A counted of alerts processed
+#
+# - input.nws_tts_volume_normal : 
+#   Used to set the volume level for TTS normal alerts
+#
+# - input.nws_tts_volume_critical : 
+#   Used to set the volume level for TTS critical alerts
+#
+# - input.nws_notification_level : 
+#   Used to set the severity of alerts you want to be notified about
+#
+# - input.nws_tts_targets : 
+#   Select which TTS devices you want alerts sent to
+#   *You need to update the selections and devices for your configuration*
+#
+# - input.nws_mobile_devices_critical : 
+#   Select which mobile devices get critical notifications
+#   *You need to update the selections and devices for your configuration*
+#
+# - input.nws_mobile_devices_normal : 
+#   Select which mobile devices get non-critical notifications
+#   *You need to update the selections and devices for your configuration*
+
+input_text:
+  nws_zone:
+    name: NWS Zone
+    initial: "ILZ020"
+    max: 10
+    icon: mdi:map-marker
+  
+  nws_county:
+    name: NWS County
+    initial: "ILC093"
+    max: 10
+    icon: mdi:map-marker
+  
+  nws_api_email:
+    name: NWS API email
+    initial: "me@example.com"
+    max: 255
+    icon: mdi:email
+
+  nws_api_host:
+    name: NWS API host
+    initial: "ha.example.com"
+    max: 255
+    icon: mdi:dns
+
+  nws_processed_alerts:
+    name: Processed NWS Alert IDs
+    max: 255
+    initial: ""
+
+input_boolean:
+  nws_alerts_quiet_mode:
+    name: NWS Alerts Quiet Mode
+    icon: mdi:volume-off
+    initial: false
+
+input_datetime:
+  nws_last_alert:
+    name: Last NWS Alert Time
+    has_date: true
+    has_time: true
+
+input_number:
+  nws_alert_count_total:
+    name: Total NWS Alerts Received
+    icon: mdi:counter
+    initial: 0
+    min: 0
+    max: 10000
+    step: 1
+    mode: box
+  
+  nws_tts_volume_normal:
+    name: NWS TTS Volume (Normal Alerts)
+    min: 0
+    max: 1
+    step: 0.1
+    initial: 0.5
+    icon: mdi:volume-medium
+  
+  nws_tts_volume_critical:
+    name: NWS TTS Volume (Critical Alerts)
+    min: 0
+    max: 1
+    step: 0.1
+    initial: 1.0
+    icon: mdi:volume-high
+
+input_select:
+  nws_notification_level:
+    name: NWS Notification Level
+    options:
+      - "All Alerts"
+      - "Severe and Above"
+      - "Extreme Only"
+      - "None"
+    initial: "Severe and Above"
+    icon: mdi:bell-ring
+  
+  nws_tts_targets:
+    name: NWS TTS Announcement Locations
+    options:
+      - "Living Room Only"
+      - "Bedrooms Only"
+      - "Playroom Only"
+      - "All Speakers"
+      - "None"
+    initial: "Living Room Only"
+    icon: mdi:speaker
+  
+  nws_mobile_devices_critical:
+    name: NWS Mobile Devices (Severe & Above)
+    options:
+      - "Ti's iPhone"
+      - "Amy's iPhone"
+      - "All Devices"
+      - "None"
+    initial: "All Devices"
+    icon: mdi:cellphone-sound
+  
+  nws_mobile_devices_normal:
+    name: NWS Mobile Devices (Below Severe)
+    options:
+      - "Ti's iPhone"
+      - "Amy's iPhone"
+      - "All Devices"
+      - "None"
+    initial: "Ti's iPhone"
+    icon: mdi:cellphone
 
 rest:
   - resource: https://api.weather.gov/alerts/active/count
     scan_interval: 60
     headers:
-      User-Agent: (ti@daleggetts.com, hass.home.daleggetts.com)
+      User-Agent: >
+        ({{ states('input.nws_api_email') }}, {{ states('input.nws_api_host') }})
       Accept: application/ld+json
     sensor:
       - name: 'NWS Alert Count'
+        unique_id: nws_alert_count
         value_template: >
-          {% if value_json is defined and value_json.zones.ILZ020 is defined %}
-            {{ value_json.zones.ILZ020 }}
-          {% elif value_json is defined and value_json.zones.ILC093 is defined %}
-            {{ value_json.zones.ILC093 }}
+          {% set zone = states('input_text.nws_zone') %}
+          {% set county = states('input_text.nws_county') %}
+          {% if value_json.zones[zone] is defined %}
+            {{ value_json.zones[zone] }}
+          {% elif value_json.zones[county] is defined %}
+            {{ value_json.zones[county] }}
           {% else %}
             0
           {% endif %}
-  - resource: https://api.weather.gov/alerts/active?zone=ILZ020,ILC093
+        availability: >
+          {{ value_json is defined }}
+        
+  - resource: >
+      https://api.weather.gov/alerts/active?zone={{ states('input_text.nws_zone') }},{{ states('input_text.nws_county') }}
     scan_interval: 60
     headers:
-      User-Agent: (ti@daleggetts.com, hass.home.daleggetts.com)
+      User-Agent: >
+        ({{ states('input.nws_api_email') }}, {{ states('input.nws_api_host') }})
       Accept: application/geo+json
     sensor:
       - name: 'NWS Alert Event 1'
+        unique_id: nws_alert_event_1
         value_template: >
           {% if value_json.features[0] is defined %}
-            {{ value_json['features'][0]['properties'].event }}
+            {{ value_json.features[0].properties.event }}
           {% else %}
             None
           {% endif %}
+        availability: >
+          {{ value_json is defined }}
         json_attributes_path: "$.features[0].properties"
         json_attributes:
+          - id
           - effective
           - onset
           - expires
@@ -61,15 +224,20 @@ rest:
           - urgency
           - description
           - areaDesc
+          
       - name: 'NWS Alert Event 2'
+        unique_id: nws_alert_event_2
         value_template: >
           {% if value_json.features[1] is defined %}
-            {{ value_json['features'][1]['properties'].event }}
+            {{ value_json.features[1].properties.event }}
           {% else %}
             None
           {% endif %}
+        availability: >
+          {{ value_json is defined }}
         json_attributes_path: "$.features[1].properties"
         json_attributes:
+          - id
           - effective
           - onset
           - expires
@@ -80,15 +248,20 @@ rest:
           - urgency
           - description
           - areaDesc
+          
       - name: 'NWS Alert Event 3'
+        unique_id: nws_alert_event_3
         value_template: >
           {% if value_json.features[2] is defined %}
-            {{ value_json['features'][2]['properties'].event }}
+            {{ value_json.features[2].properties.event }}
           {% else %}
             None
           {% endif %}
+        availability: >
+          {{ value_json is defined }}
         json_attributes_path: "$.features[2].properties"
         json_attributes:
+          - id
           - effective
           - onset
           - expires
@@ -99,15 +272,20 @@ rest:
           - urgency
           - description
           - areaDesc
+          
       - name: 'NWS Alert Event 4'
+        unique_id: nws_alert_event_4
         value_template: >
           {% if value_json.features[3] is defined %}
-            {{ value_json['features'][3]['properties'].event }}
+            {{ value_json.features[3].properties.event }}
           {% else %}
             None
           {% endif %}
+        availability: >
+          {{ value_json is defined }}
         json_attributes_path: "$.features[3].properties"
         json_attributes:
+          - id
           - effective
           - onset
           - expires
@@ -119,554 +297,458 @@ rest:
           - description
           - areaDesc
 
+# Template sensors for summary and dashboard
+template:
+  - trigger:
+      - platform: state
+        entity_id:
+          - sensor.nws_alert_event_1
+          - sensor.nws_alert_event_2
+          - sensor.nws_alert_event_3
+          - sensor.nws_alert_event_4
+    sensor:
+      - name: "NWS Alert Summary"
+        unique_id: nws_alert_summary
+        state: >
+          {% set ns = namespace(alerts=[]) %}
+          {% for i in range(1, 5) %}
+            {% set sensor = 'sensor.nws_alert_event_' ~ i %}
+            {% if states(sensor) not in ['None', 'unknown', 'unavailable'] %}
+              {% set ns.alerts = ns.alerts + [states(sensor)] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.alerts | length }}
+        attributes:
+          active_alerts: >
+            {% set ns = namespace(alerts=[]) %}
+            {% for i in range(1, 5) %}
+              {% set sensor = 'sensor.nws_alert_event_' ~ i %}
+              {% if states(sensor) not in ['None', 'unknown', 'unavailable'] %}
+                {% set ns.alerts = ns.alerts + [states(sensor)] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.alerts }}
+          alert_ids: >
+            {% set ns = namespace(ids=[]) %}
+            {% for i in range(1, 5) %}
+              {% set sensor = 'sensor.nws_alert_event_' ~ i %}
+              {% set alert_id = state_attr(sensor, 'id') %}
+              {% if alert_id is not none %}
+                {% set ns.ids = ns.ids + [alert_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.ids }}
+  
+  - sensor:
+      - name: "NWS Alerts Dashboard"
+        unique_id: nws_alerts_dashboard
+        state: "{{ states('sensor.nws_alert_count') }}"
+        attributes:
+          alerts: >
+            {% set ns = namespace(list=[]) %}
+            {% for i in range(1, 5) %}
+              {% set sensor = 'sensor.nws_alert_event_' ~ i %}
+              {% if states(sensor) not in ['None', 'unknown', 'unavailable'] %}
+                {% set ns.list = ns.list + [{
+                  'event': states(sensor),
+                  'severity': state_attr(sensor, 'severity'),
+                  'expires': state_attr(sensor, 'expires'),
+                  'description': state_attr(sensor, 'description')[:100] ~ '...' if state_attr(sensor, 'description') else ''
+                }] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.list }}
+          last_update: "{{ now().isoformat() }}"
+          total_alerts_received: "{{ states('input_number.nws_alert_count_total') }}"
+          last_alert_time: "{{ states('input_datetime.nws_last_alert') }}"
+
 script:
-  ##
-  # Text to Speech alerts for critical events
-  #
-  critical_nws_tts_alert_1:
-    alias: 'Critical NWS TTS Alert 1'
+  # Consolidated TTS Alert Script with parameters and volume control
+  nws_tts_alert:
+    alias: 'NWS TTS Alert'
+    mode: queued
+    max: 10
+    fields:
+      event_number:
+        description: 'Alert event number (1-4)'
+        example: '1'
     sequence:
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_1', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_1.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_1', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_1', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
-      - delay: 00:00:10
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_1', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_1.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_1', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_1', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
-  critical_nws_tts_alert_2:
-    alias: 'Critical NWS TTS Alert 2'
-    sequence:
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_2', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_2.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_2', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_2', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
-      - delay: 00:00:10
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_2', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_2.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_2', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_2', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
-  critical_nws_tts_alert_3:
-    alias: 'Critical NWS TTS Alert 3'
-    sequence:
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_3', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_3.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_3', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_3', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
-      - delay: 00:00:10
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_3', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_3.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_3', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_3', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
-  critical_nws_tts_alert_4:
-    alias: 'Critical NWS TTS Alert 4'
-    sequence:
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_4', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_4.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_4', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_4', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
-      - delay: 00:00:10
-      - action: tts.speak
-        target:
-          entity_id: tts.home_assistant_cloud
-        data:
-          media_player_entity_id: media_player.living_room_speaker
-          message: "Attention!,,,Attention!,,,A {{ state_attr('sensor.nws_alert_event_4', 'severity') }}  weather alert has been issued. 
-                    The National Weather Service has issued a {{ states.sensor.nws_alert_event_4.state }} for your area. 
-                    It is in effect from {{ as_timestamp(state_attr('sensor.nws_alert_event_4', 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }} until
-                    {{ as_timestamp(state_attr('sensor.nws_alert_event_4', 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}."
+      - variables:
+          sensor_name: "sensor.nws_alert_event_{{ event_number }}"
+          severity: "{{ state_attr(sensor_name, 'severity') | default('') }}"
+          event_type: "{{ states(sensor_name) }}"
+          effective: "{{ as_timestamp(state_attr(sensor_name, 'effective')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}"
+          expires: "{{ as_timestamp(state_attr(sensor_name, 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}"
+          tts_target: "{{ states('input_select.nws_tts_targets') }}"
+          volume: >
+            {{ states('input_number.nws_tts_volume_critical') | float 
+               if severity in ['Extreme', 'Severe']
+               else states('input_number.nws_tts_volume_normal') | float }}
+          target_entities: >
+            {% set target = states('input_select.nws_tts_targets') %}
+            {% if target == 'All Speakers' %}
+              media_player.living_room_speaker,media_player.playroom_speaker,media_player.aidans_bedroom_speaker,media_player.daylans_bedroom_speaker
+            {% elif target == 'Bedrooms Only' %}
+              media_player.aidans_bedroom_speaker,media_player.daylans_bedroom_speaker
+            {% elif target == 'Playroom Only' %}
+              media_player.playroom_speaker
+            {% elif target == 'Living Room Only' %}
+              media_player.living_room_speaker
+            {% else %}
+              none
+            {% endif %}
+      
+      - if:
+          - condition: template
+            value_template: "{{ target_entities != 'none' }}"
+        then:
+          # Set volume on target speakers
+          - action: media_player.volume_set
+            target:
+              entity_id: "{{ target_entities.split(',') }}"
+            data:
+              volume_level: "{{ volume }}"
+          
+          # First announcement
+          - action: tts.speak
+            target:
+              entity_id: tts.home_assistant_cloud
+            data:
+              media_player_entity_id: "{{ target_entities }}"
+              message: "Attention!,,,Attention!,,,A {{ severity }} weather alert has been issued. The National Weather Service has issued a {{ event_type }} for your area. It is in effect from {{ effective }} until {{ expires }}."
+          
+          # Delay between announcements
+          - delay: 00:00:10
+          
+          # Second announcement
+          - action: tts.speak
+            target:
+              entity_id: tts.home_assistant_cloud
+            data:
+              media_player_entity_id: "{{ target_entities }}"
+              message: "Attention!,,,Attention!,,,A {{ severity }} weather alert has been issued. The National Weather Service has issued a {{ event_type }} for your area. It is in effect from {{ effective }} until {{ expires }}."
 
-  ##
-  # Mobile notifications with full volume for critical events
-  #
-  critical_nws_mobile_alert_1:
-    alias: 'Critical NWS Mobile Alert 1'
+  # Consolidated Mobile Alert Script with actionable notifications and device selection
+  nws_mobile_alert:
+    alias: 'NWS Mobile Alert'
+    mode: queued
+    max: 10
+    fields:
+      event_number:
+        description: 'Alert event number (1-4)'
+        example: '1'
+      critical:
+        description: 'Critical alert with sound'
+        example: true
+      volume:
+        description: 'Volume level (0-1)'
+        example: 1
     sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_1', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 1
-  critical_nws_mobile_alert_2:
-    alias: 'Critical NWS Mobile Alert 2'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_2', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 1
-  critical_nws_mobile_alert_3:
-    alias: 'Critical NWS Mobile Alert 3'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_3', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 1
-  critical_nws_mobile_alert_4:
-    alias: 'Critical NWS Mobile Alert 4'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_4', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 1
-
-  ##
-  # Mobile notifications with no volume for critical events
-  #
-  critical_nws_mobile_notification_1:
-    alias: 'Critical NWS Mobile Notification 1'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_1', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 0
-  critical_nws_mobile_notification_2:
-    alias: 'Critical NWS Mobile Notification 2'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_2', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 0
-  critical_nws_mobile_notification_3:
-    alias: 'Critical NWS Mobile Notification 3'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_3', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 0
-  critical_nws_mobile_notification_4:
-    alias: 'Critical NWS Mobile Notification 4'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_4', 'description') }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 1
-                volume: 0
-
-  ##
-  # Mobile notifications with for non-critical events
-  #
-  nws_mobile_notification_1:
-    alias: 'NWS Mobile Notification 1'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_1', 'description') }}
-  nws_mobile_notification_2:
-    alias: 'NWS Mobile Notification 2'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_2', 'description') }}
-  nws_mobile_notification_3:
-    alias: 'NWS Mobile Notification 3'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_3', 'description') }}
-  nws_mobile_notification_4:
-    alias: 'NWS Mobile Notification 4'
-    sequence:
-      - action: notify.mobile_app_tis_iphone
-        metadata: {}
-        data:
-          message: >
-            {{ state_attr('sensor.nws_alert_event_4', 'description') }}
+      - variables:
+          sensor_name: "sensor.nws_alert_event_{{ event_number }}"
+          event_type: "{{ states(sensor_name) }}"
+          description: "{{ state_attr(sensor_name, 'description') }}"
+          severity: "{{ state_attr(sensor_name, 'severity') | default('') }}"
+          severity_icon: >
+            {% if severity == 'Extreme' %}🔴
+            {% elif severity == 'Severe' %}🟠
+            {% else %}🟡
+            {% endif %}
+          is_critical: "{{ severity in ['Extreme', 'Severe'] }}"
+          device_setting: >
+            {% if severity in ['Extreme', 'Severe'] %}
+              {{ states('input_select.nws_mobile_devices_critical') }}
+            {% else %}
+              {{ states('input_select.nws_mobile_devices_normal') }}
+            {% endif %}
+          target_devices: >
+            {% set setting = states('input_select.nws_mobile_devices_critical') if severity in ['Extreme', 'Severe'] else states('input_select.nws_mobile_devices_normal') %}
+            {% if setting == 'All Devices' %}
+              notify.mobile_app_tis_iphone,notify.mobile_app_amys_iphone
+            {% elif setting == "Ti's iPhone" %}
+              notify.mobile_app_tis_iphone
+            {% elif setting == "Amy's iPhone" %}
+              notify.mobile_app_amys_iphone
+            {% else %}
+              none
+            {% endif %}
+      
+      - if:
+          - condition: template
+            value_template: "{{ target_devices != 'none' }}"
+        then:
+          - repeat:
+              for_each: "{{ target_devices.split(',') }}"
+              sequence:
+                - action: "{{ repeat.item }}"
+                  data:
+                    title: "{{ severity_icon }} {{ event_type }}"
+                    message: "{{ description }}"
+                    data:
+                      actions:
+                        - action: "VIEW_NWS_ALERT_{{ event_number }}"
+                          title: "View Full Alert"
+                        - action: "DISMISS_NWS_ALERT_{{ event_number }}"
+                          title: "Dismiss"
+                      push:
+                        sound:
+                          name: default
+                          critical: "{{ critical | int }}"
+                          volume: "{{ volume | float }}"
+                      tag: "nws_alert_{{ event_number }}"
 
 automation:
+  # Clear notifications when alert count goes to zero
   - alias: 'Clear NWS Alert Pop Up'
+    id: clear_nws_alert_popup
     triggers:
       - trigger: state
         entity_id: sensor.nws_alert_count
         to: '0'
     actions:
-      - action: persistent_notification.dismiss
+      - repeat:
+          count: 4
+          sequence:
+            - action: persistent_notification.dismiss
+              data:
+                notification_id: "nws_alert_{{ repeat.index }}"
+      
+      # Clear processed alerts list when no active alerts
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.nws_processed_alerts
         data:
-          notification_id: "nws_alert_1"
-      - action: persistent_notification.dismiss
-        data:
-          notification_id: "nws_alert_2"
-      - action: persistent_notification.dismiss
-        data:
-          notification_id: "nws_alert_3"
-      - action: persistent_notification.dismiss
-        data:
-          notification_id: "nws_alert_4"
-  - alias: 'NWS Alert Pop Up 1'
+          value: ""
+
+  # Main alert handler with rate limiting and deduplication
+  - alias: 'NWS Alert Handler'
+    id: nws_alert_handler
     triggers:
       - trigger: state
         entity_id: sensor.nws_alert_count
     conditions:
-      - condition: numeric_state
-        entity_id: sensor.nws_alert_count
-        above: 0
+      - condition: template
+        value_template: "{{ states('sensor.nws_alert_count') | int(0) > 0 }}"
+      # Rate limiting: only run if last alert was more than 2 minutes ago
+      - condition: template
+        value_template: >
+          {{ states('input_datetime.nws_last_alert') in ['unknown', 'unavailable'] or
+             (as_timestamp(now()) - as_timestamp(states('input_datetime.nws_last_alert')) > 120) }}
     actions:
-        ## Create new persistant notifications in the UI for new alert
-        #  and notify mobile devices appropriately.
-      - parallel:    
-        - if:
-          - condition: not
-            conditions:
-              - condition: state
-                entity_id: sensor.nws_alert_event_1
-                state: None
-          then:
-            - parallel:
-              - action: persistent_notification.create
-                metadata: {}
-                data:
-                  notification_id: nws_alert_1
-                  title: >
-                    {{ states.sensor.nws_alert_event_1.state }}
-                  message: >
-                    {{ state_attr('sensor.nws_alert_event_1', 'description') }}
-              - if:
+      # Update last alert timestamp
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.nws_last_alert
+        data:
+          datetime: "{{ now().isoformat() }}"
+      
+      # Increment alert counter
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.nws_alert_count_total
+        data:
+          value: "{{ states('input_number.nws_alert_count_total') | int + 1 }}"
+      
+      # Process each alert
+      - repeat:
+          for_each:
+            - 1
+            - 2
+            - 3
+            - 4
+          sequence:
+            - variables:
+                event_num: "{{ repeat.item }}"
+                sensor_name: "sensor.nws_alert_event_{{ event_num }}"
+                severity: "{{ state_attr(sensor_name, 'severity') | default('') }}"
+                certainty: "{{ state_attr(sensor_name, 'certainty') | default('') }}"
+                urgency: "{{ state_attr(sensor_name, 'urgency') | default('') }}"
+                description: "{{ state_attr(sensor_name, 'description') | default('') }}"
+                areaDesc: "{{ state_attr(sensor_name, 'areaDesc') | default('') }}"
+                alert_id: "{{ state_attr(sensor_name, 'id') | default('') }}"
+                is_extreme_or_severe: "{{ severity in ['Extreme', 'Severe'] }}"
+                is_tornado_warning_local: "{{ description and 'Tornado' in description and 'Warning' in description and 'Kendall' in areaDesc }}"
+                is_high_certainty: "{{ certainty in ['Observed', 'Likely'] }}"
+                is_high_urgency: "{{ urgency in ['Immediate', 'Expected'] }}"
+                quiet_mode: "{{ is_state('input_boolean.nws_alerts_quiet_mode', 'on') }}"
+                notification_level: "{{ states('input_select.nws_notification_level') }}"
+                should_notify: >
+                  {{ (notification_level == 'All Alerts') or
+                     (notification_level == 'Severe and Above' and severity in ['Severe', 'Extreme']) or
+                     (notification_level == 'Extreme Only' and severity == 'Extreme') }}
+                severity_icon: >
+                  {% if severity == 'Extreme' %}🔴
+                  {% elif severity == 'Severe' %}🟠
+                  {% else %}🟡
+                  {% endif %}
+                processed_alerts: "{{ states('input_text.nws_processed_alerts') }}"
+                already_processed: "{{ alert_id and alert_id in processed_alerts }}"
+                
+            - if:
+                # Only process if alert exists and hasn't been processed yet
+                - condition: template
+                  value_template: "{{ states(sensor_name) not in ['None', 'unknown', 'unavailable'] and not already_processed }}"
+              then:
+                # Mark alert as processed
+                - action: input_text.set_value
+                  target:
+                    entity_id: input_text.nws_processed_alerts
+                  data:
+                    value: >
+                      {% if processed_alerts %}
+                        {{ processed_alerts ~ ',' ~ alert_id }}
+                      {% else %}
+                        {{ alert_id }}
+                      {% endif %}
+                
+                - parallel:
+                    # Create persistent notification with severity icon
+                    - action: persistent_notification.create
+                      data:
+                        notification_id: "nws_alert_{{ event_num }}"
+                        title: "{{ severity_icon }} {{ states(sensor_name) }}"
+                        message: "{{ description }}"
+                    
+                    # Handle notifications based on severity and settings
+                    - if:
+                        - condition: template
+                          value_template: "{{ should_notify }}"
+                      then:
+                        - if:
+                            - condition: template
+                              value_template: "{{ is_extreme_or_severe }}"
+                          then:
+                            - if:
+                                # Tornado warning in local area - TTS + mobile alert (unless quiet mode)
+                                - condition: template
+                                  value_template: "{{ is_tornado_warning_local }}"
+                              then:
+                                - parallel:
+                                    - if:
+                                        - condition: template
+                                          value_template: "{{ not quiet_mode }}"
+                                      then:
+                                        - action: script.nws_tts_alert
+                                          data:
+                                            event_number: "{{ event_num }}"
+                                    - action: script.nws_mobile_alert
+                                      data:
+                                        event_number: "{{ event_num }}"
+                                        critical: 1
+                                        volume: 1
+                              else:
+                                # Other severe alerts - conditional mobile alert
+                                - if:
+                                    - condition: and
+                                      conditions:
+                                        - condition: time
+                                          after: "05:30:00"
+                                          before: "22:00:00"
+                                        - condition: template
+                                          value_template: "{{ is_high_certainty and is_high_urgency }}"
+                                  then:
+                                    - action: script.nws_mobile_alert
+                                      data:
+                                        event_number: "{{ event_num }}"
+                                        critical: 1
+                                        volume: 1
+                                  else:
+                                    - action: script.nws_mobile_alert
+                                      data:
+                                        event_number: "{{ event_num }}"
+                                        critical: 1
+                                        volume: 0
+                          else:
+                            # Non-critical alerts - silent notification
+                            - if:
+                                - condition: template
+                                  value_template: "{{ severity != 'Unknown' }}"
+                              then:
+                                - action: script.nws_mobile_alert
+                                  data:
+                                    event_number: "{{ event_num }}"
+                                    critical: 0
+                                    volume: 0
+
+  # Auto dismiss expired alerts
+  - alias: 'Auto Dismiss Expired NWS Alerts'
+    id: auto_dismiss_expired_nws_alerts
+    triggers:
+      - trigger: time_pattern
+        minutes: "/5"  # Check every 5 minutes
+    actions:
+      - repeat:
+          for_each: [1, 2, 3, 4]
+          sequence:
+            - variables:
+                sensor_name: "sensor.nws_alert_event_{{ repeat.item }}"
+                expires: "{{ state_attr(sensor_name, 'expires') }}"
+            - if:
                 - condition: template
                   value_template: >
-                    {{ is_state_attr('sensor.nws_alert_event_1', 'severity', 'Extreme') or
-                       is_state_attr('sensor.nws_alert_event_1', 'severity', 'Severe') }}
-                then:
-                  - if:
-                    - condition: template
-                      value_template: >
-                        {{ 'Tornado' in state_attr('sensor.nws_alert_event_1', 'description') and
-                           'Warning' in state_attr('sensor.nws_alert_event_1', 'description') and
-                           'Kendall' in state_attr('sensor.nws_alert_event_1', 'areadesc') }}
-                    then:
-                      - parallel:
-                        - action: script.critical_nws_tts_alert_1
-                        - action: script.critical_nws_mobile_alert_1
-                    else:
-                      - if:
-                        - condition: and
-                          conditions:
-                          - condition: time
-                            after: "05:30:00"
-                            before: "22:00:00"
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_1', 'certainty', 'Observed') or
-                                 is_state_attr('sensor.nws_alert_event_1', 'certainty', 'Likely') }}
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_1', 'urgency', 'Immediate') or
-                                 is_state_attr('sensor.nws_alert_event_1', 'urgency', 'Expected') }}
-                        then:
-                          - action: script.critical_nws_mobile_alert_1
-                        else:
-                          - action: script.critical_nws_mobile_notification_1
-                else:
-                  - if:
-                    - condition: not
-                      conditions:
-                        - condition: template
-                          value_template: >
-                            {{ is_state_attr('sensor.nws_alert_event_1', 'severity', 'Unknown') }}
-                    then:
-                      - action: script.critical_nws_mobile_notification_1
-        - if:
-          - condition: and
-            conditions:
-            - condition: not
-              conditions:
-                - condition: state
-                  entity_id: sensor.nws_alert_event_2
-                  state: None
-            - condition: template
-              value_template: >
-                {{ state_attr('sensor.nws_alert_event_2', 'description') != state_attr('sensor.nws_alert_event_1', 'description') }}
-          then:
-            - parallel:
-              - action: persistent_notification.create
-                metadata: {}
+                    {{ expires and 
+                       as_timestamp(expires) < now().timestamp() and
+                       states(sensor_name) != 'None' }}
+              then:
+                - action: persistent_notification.dismiss
+                  data:
+                    notification_id: "nws_alert_{{ repeat.item }}"
+
+  # Log alerts to history
+  - alias: 'Log NWS Alert to History'
+    id: log_nws_alert_history
+    triggers:
+      - trigger: state
+        entity_id:
+          - sensor.nws_alert_event_1
+          - sensor.nws_alert_event_2
+          - sensor.nws_alert_event_3
+          - sensor.nws_alert_event_4
+        to: 
+        not_from:
+          - 'None'
+          - 'unknown'
+          - 'unavailable'
+    actions:
+      - action: logbook.log
+        data:
+          name: "NWS Alert"
+          message: >
+            {{ trigger.to_state.state }}: 
+            {{ state_attr(trigger.entity_id, 'severity') | default('Unknown') }} - 
+            Expires {{ state_attr(trigger.entity_id, 'expires') }}
+          entity_id: "{{ trigger.entity_id }}"
+  
+  # Handle mobile app action responses
+  - alias: 'Handle NWS Alert Actions'
+    id: handle_nws_alert_actions
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.event.data.action.startswith('VIEW_NWS_ALERT_') or trigger.event.data.action.startswith('DISMISS_NWS_ALERT_') }}"
+    actions:
+      - variables:
+          action_type: "{{ trigger.event.data.action.split('_')[0:3] | join('_') }}"
+          event_num: "{{ trigger.event.data.action.split('_')[-1] }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ action_type == 'VIEW_NWS_ALERT' }}"
+            sequence:
+              # Send full details to the device that requested it
+              - variables:
+                  requesting_device: "{{ trigger.event.data.device_id }}"
+              - action: "notify.mobile_app_{{ trigger.event.data.device_id | regex_replace('[^a-z0-9_]', '_') }}"
                 data:
-                  notification_id: nws_alert_2
-                  title: >
-                    {{ states.sensor.nws_alert_event_2.state }}
+                  title: "Full Alert Details"
                   message: >
-                    {{ state_attr('sensor.nws_alert_event_2', 'description') }}
-              - if:
-                - condition: template
-                  value_template: >
-                    {{ is_state_attr('sensor.nws_alert_event_2', 'severity', 'Extreme') or
-                       is_state_attr('sensor.nws_alert_event_2', 'severity', 'Severe') }}
-                then:
-                  - if:
-                    - condition: template
-                      value_template: >
-                        {{ 'Tornado' in state_attr('sensor.nws_alert_event_2', 'description') and
-                           'Warning' in state_attr('sensor.nws_alert_event_2', 'description') and
-                           'Kendall' in state_attr('sensor.nws_alert_event_2', 'areadesc') }}
-                    then:
-                      - parallel:
-                        - action: script.critical_nws_tts_alert_2
-                        - action: script.critical_nws_mobile_alert_2
-                    else:
-                      - if:
-                        - condition: and
-                          conditions:
-                          - condition: time
-                            after: "05:30:00"
-                            before: "22:00:00"
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_2', 'certainty', 'Observed') or
-                                 is_state_attr('sensor.nws_alert_event_2', 'certainty', 'Likely') }}
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_2', 'urgency', 'Immediate') or
-                                 is_state_attr('sensor.nws_alert_event_2', 'urgency', 'Expected') }}
-                        then:
-                          - action: script.critical_nws_mobile_alert_2
-                        else:
-                          - action: script.critical_nws_mobile_notification_2
-                else:
-                  - if:
-                    - condition: not
-                      conditions:
-                        - condition: template
-                          value_template: >
-                            {{ is_state_attr('sensor.nws_alert_event_2', 'severity', 'Unknown') }}
-                    then:
-                      - action: script.critical_nws_mobile_notification_2
-        - if:
-          - condition: and
-            conditions:
-            - condition: not
-              conditions:
-                - condition: state
-                  entity_id: sensor.nws_alert_event_3
-                  state: None
-            - condition: template
-              value_template: >
-                {{ state_attr('sensor.nws_alert_event_3', 'description') != state_attr('sensor.nws_alert_event_1', 'description') or
-                   state_attr('sensor.nws_alert_event_3', 'description') != state_attr('sensor.nws_alert_event_2', 'description') }}
-          - condition: not
-            conditions:
-              - condition: state
-                entity_id: sensor.nws_alert_event_3
-                state: None
-          then:
-            - parallel:
-              - action: persistent_notification.create
-                metadata: {}
+                    {{ state_attr('sensor.nws_alert_event_' ~ event_num, 'description') }}
+          - conditions:
+              - condition: template
+                value_template: "{{ action_type == 'DISMISS_NWS_ALERT' }}"
+            sequence:
+              - action: persistent_notification.dismiss
                 data:
-                  notification_id: nws_alert_3
-                  title: >
-                    {{ states.sensor.nws_alert_event_3.state }}
-                  message: >
-                    {{ state_attr('sensor.nws_alert_event_3', 'description') }}
-              - if:
-                - condition: template
-                  value_template: >
-                    {{ is_state_attr('sensor.nws_alert_event_3', 'severity', 'Extreme') or
-                       is_state_attr('sensor.nws_alert_event_3', 'severity', 'Severe') }}
-                then:
-                  - if:
-                    - condition: template
-                      value_template: >
-                        {{ 'Tornado' in state_attr('sensor.nws_alert_event_3', 'description') and
-                           'Warning' in state_attr('sensor.nws_alert_event_3', 'description') and
-                           'Kendall' in state_attr('sensor.nws_alert_event_3', 'areadesc') }}
-                    then:
-                      - parallel:
-                        - action: script.critical_nws_tts_alert_3
-                        - action: script.critical_nws_mobile_alert_3
-                    else:
-                      - if:
-                        - condition: and
-                          conditions:
-                          - condition: time
-                            after: "05:30:00"
-                            before: "22:00:00"
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_3', 'certainty', 'Observed') or
-                                 is_state_attr('sensor.nws_alert_event_3', 'certainty', 'Likely') }}
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_3', 'urgency', 'Immediate') or
-                                 is_state_attr('sensor.nws_alert_event_3', 'urgency', 'Expected') }}
-                        then:
-                          - action: script.critical_nws_mobile_alert_3
-                        else:
-                          - action: script.critical_nws_mobile_notification_3
-                else:
-                  - if:
-                    - condition: not
-                      conditions:
-                        - condition: template
-                          value_template: >
-                            {{ is_state_attr('sensor.nws_alert_event_3', 'severity', 'Unknown') }}
-                    then:
-                      - action: script.critical_nws_mobile_notification_3
-        - if:
-          - condition: and
-            conditions:
-            - condition: not
-              conditions:
-                - condition: state
-                  entity_id: sensor.nws_alert_event_4
-                  state: None
-            - condition: template
-              value_template: >
-                {{ state_attr('sensor.nws_alert_event_4', 'description') != state_attr('sensor.nws_alert_event_1', 'description') or
-                   state_attr('sensor.nws_alert_event_4', 'description') != state_attr('sensor.nws_alert_event_2', 'description') or
-                   state_attr('sensor.nws_alert_event_4', 'description') != state_attr('sensor.nws_alert_event_3', 'description') }}
-          then:
-            - parallel:
-              - action: persistent_notification.create
-                metadata: {}
-                data:
-                  notification_id: nws_alert_4
-                  title: >
-                    {{ states.sensor.nws_alert_event_4.state }}
-                  message: >
-                    {{ state_attr('sensor.nws_alert_event_4', 'description') }}
-              - if:
-                - condition: template
-                  value_template: >
-                    {{ is_state_attr('sensor.nws_alert_event_4', 'severity', 'Extreme') or
-                       is_state_attr('sensor.nws_alert_event_4', 'severity', 'Severe') }}
-                then:
-                  - if:
-                    - condition: template
-                      value_template: >
-                        {{ 'Tornado' in state_attr('sensor.nws_alert_event_4', 'description') and
-                           'Warning' in state_attr('sensor.nws_alert_event_4', 'description') and
-                           'Kendall' in state_attr('sensor.nws_alert_event_4', 'areadesc') }}
-                    then:
-                      - parallel:
-                        - action: script.critical_nws_tts_alert_4
-                        - action: script.critical_nws_mobile_alert_4
-                    else:
-                      - if:
-                        - condition: and
-                          conditions:
-                          - condition: time
-                            after: "05:30:00"
-                            before: "22:00:00"
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_4', 'certainty', 'Observed') or
-                                 is_state_attr('sensor.nws_alert_event_4', 'certainty', 'Likely') }}
-                          - condition: template
-                            value_template: >
-                              {{ is_state_attr('sensor.nws_alert_event_4', 'urgency', 'Immediate') or
-                                 is_state_attr('sensor.nws_alert_event_4', 'urgency', 'Expected') }}
-                        then:
-                          - action: script.critical_nws_mobile_alert_4
-                        else:
-                          - action: script.critical_nws_mobile_notification_4
-                else:
-                  - if:
-                    - condition: not
-                      conditions:
-                        - condition: template
-                          value_template: >
-                            {{ is_state_attr('sensor.nws_alert_event_4', 'severity', 'Unknown') }}
-                    then:
-                      - action: script.critical_nws_mobile_notification_4
-          
-# I created two announcements so that a minor event won't wake you up in the middle of the night.
-# 
-# You’ll notice I repeat the announcement twice in case the first announcement doesn’t wake you up.
-# 
-# And I haven’t worked out the volume setting part yet. If anyone has any working solutions feel free to let me know.
-# 
-# The script above generates a persistent notification pop-up.
+                  notification_id: "nws_alert_{{ event_num }}"
