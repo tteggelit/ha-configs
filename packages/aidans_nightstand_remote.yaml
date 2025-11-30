@@ -1,0 +1,238 @@
+# Scripts
+script:
+  cycle_aidans_nightstand_light_color:
+    alias: Cycle Aidan's Nightstand Light Color
+    mode: restart
+    fields:
+      entity_id:
+        description: The light entity to control
+        example: light.aidan_s_night_stand_light
+      direction:
+        description: Direction to cycle (forward or backward)
+        example: forward
+    sequence:
+      - variables:
+          current_hs: "{{ state_attr(entity_id, 'hs_color') }}"
+          current_temp: "{{ state_attr(entity_id, 'color_temp') }}"
+          current_mode: "{{ state_attr(entity_id, 'color_mode') }}"
+          
+          # Define color sequence with whites
+          colors:
+            - name: red
+              hs: [0, 100]
+            - name: orange
+              hs: [30, 100]
+            - name: yellow
+              hs: [60, 100]
+            - name: green
+              hs: [120, 100]
+            - name: cyan
+              hs: [180, 100]
+            - name: blue
+              hs: [240, 100]
+            - name: purple
+              hs: [280, 100]
+            - name: magenta
+              hs: [320, 100]
+            - name: warm_white
+              color_temp_kelvin: 2700
+            - name: cool_white
+              color_temp_kelvin: 4000
+            - name: bright_white
+              color_temp_kelvin: 5000
+            - name: daylight
+              color_temp_kelvin: 6500
+          
+          # Find current index
+          current_index: >
+            {% if current_mode == 'color_temp' %}
+              {% set temp_kelvin = state_attr(entity_id, 'color_temp_kelvin') | int(0) %}
+              {% if temp_kelvin == 0 %}
+                {% set temp_kelvin = (1000000 / (current_temp | int(370))) | int %}
+              {% endif %}
+              {% if temp_kelvin <= 3350 %}8
+              {% elif temp_kelvin <= 4500 %}9
+              {% elif temp_kelvin <= 5500 %}10
+              {% else %}11
+              {% endif %}
+            {% elif current_hs %}
+              {% set hue = current_hs[0] | int %}
+              {% if hue < 15 %}0
+              {% elif hue < 45 %}1
+              {% elif hue < 90 %}2
+              {% elif hue < 150 %}3
+              {% elif hue < 210 %}4
+              {% elif hue < 260 %}5
+              {% elif hue < 300 %}6
+              {% else %}7
+              {% endif %}
+            {% else %}0
+            {% endif %}
+          
+          next_index: >
+            {% if direction == 'forward' %}
+              {{ (current_index | int + 1) % 12 }}
+            {% else %}
+              {{ (current_index | int - 1) % 12 }}
+            {% endif %}
+      
+      - choose:
+          # RGB colors (indices 0-7)
+          - conditions:
+              - condition: template
+                value_template: "{{ next_index | int < 8 }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  hs_color: "{{ colors[next_index | int].hs }}"
+          
+          # White colors (indices 8-11)
+          - conditions:
+              - condition: template
+                value_template: "{{ next_index | int >= 8 }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  color_temp_kelvin: "{{ colors[next_index | int].color_temp_kelvin }}"
+
+# Automations
+automation:
+  - alias: IKEA Styrbar - Aidan's Nightstand Light Control
+    description: Control RGB light with Styrbar remote
+    mode: restart
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: e0e52daeb29bc802759b6bdbb18df41b
+          command: "on"
+        id: button_on
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: e0e52daeb29bc802759b6bdbb18df41b
+          command: "off"
+        id: button_off
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: e0e52daeb29bc802759b6bdbb18df41b
+          command: move_with_on_off
+          args: [0, 83]
+        id: brightness_up
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: e0e52daeb29bc802759b6bdbb18df41b
+          command: move
+          args: [1, 83, 0, 0]
+        id: brightness_down
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: e0e52daeb29bc802759b6bdbb18df41b
+          command: stop
+          args: [0, 0]
+        id: brightness_stop
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: e0e52daeb29bc802759b6bdbb18df41b
+          command: press
+          args: [257, 13, 0]
+        id: color_left
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: e0e52daeb29bc802759b6bdbb18df41b
+          command: press
+          args: [256, 13, 0]
+        id: color_right
+    action:
+      - choose:
+          # Turn on light
+          - conditions:
+              - condition: trigger
+                id: button_on
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.aidan_s_night_stand_light
+                data:
+                  brightness_pct: 100
+          
+          # Turn off light
+          - conditions:
+              - condition: trigger
+                id: button_off
+            sequence:
+              - service: light.turn_off
+                target:
+                  entity_id: light.aidan_s_night_stand_light
+          
+          # Brightness up (hold top button)
+          - conditions:
+              - condition: trigger
+                id: brightness_up
+            sequence:
+              - repeat:
+                  while:
+                    - condition: template
+                      value_template: >
+                        {{ state_attr('light.aidan_s_night_stand_light', 'brightness') | int(0) < 255 }}
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.aidan_s_night_stand_light
+                      data:
+                        brightness_step_pct: 10
+                    - delay:
+                        milliseconds: 200
+          
+          # Brightness down (hold bottom button)
+          - conditions:
+              - condition: trigger
+                id: brightness_down
+            sequence:
+              - repeat:
+                  while:
+                    - condition: template
+                      value_template: >
+                        {{ state_attr('light.aidan_s_night_stand_light', 'brightness') | int(0) > 23 }}
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.aidan_s_night_stand_light
+                      data:
+                        brightness_step_pct: -10
+                    - delay:
+                        milliseconds: 200
+              - service: light.turn_on
+                target:
+                  entity_id: light.aidan_s_night_stand_light
+                data:
+                  brightness_pct: 3
+          
+          # Cycle color forward (right arrow)
+          - conditions:
+              - condition: trigger
+                id: color_right
+            sequence:
+              - service: script.cycle_aidans_nightstand_light_color
+                data:
+                  entity_id: light.aidan_s_night_stand_light
+                  direction: forward
+          
+          # Cycle color backward (left arrow)
+          - conditions:
+              - condition: trigger
+                id: color_left
+            sequence:
+              - service: script.cycle_aidans_nightstand_light_color
+                data:
+                  entity_id: light.aidan_s_night_stand_light
+                  direction: backward

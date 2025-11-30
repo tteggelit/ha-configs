@@ -1,0 +1,43 @@
+# Automations
+automation:
+  - alias: IKEA Styrbar - Guest Bedroom Side Lights Control
+    description: Control RGB light with Styrbar remote
+    mode: restart
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: 4e2a160e99cbbef2818d673685056bf0
+          command: "on"
+        id: button_on
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: 4e2a160e99cbbef2818d673685056bf0
+          command: "off"
+        id: button_off
+    action:
+      - choose:
+          # Turn on light
+          - conditions:
+              - condition: trigger
+                id: button_on
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: 
+                    - light.left_guest_bedroom_light_light
+                    - light.right_guest_bedroom_light_light_2
+                data:
+                  brightness_pct: 100
+          
+          # Turn off light
+          - conditions:
+              - condition: trigger
+                id: button_off
+            sequence:
+              - service: light.turn_off
+                target:
+                  entity_id: 
+                    - light.left_guest_bedroom_light_light
+                    - light.right_guest_bedroom_light_light_2
