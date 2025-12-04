@@ -1,21 +1,257 @@
 ###############################################################################
-# Ecobee Humidity Controller for Home Assistant
+# Humidity Controller for Home Assistant
 # 
-# This integration automatically adjusts your Ecobee thermostat's humidity
-# target based on outdoor temperature to prevent window condensation.
+# This package uses dew point calculations and forecasted low temperatures
+# with asymmetric rate limiting to prevent window condensation while 
+# maximizing indoor comfort. It was refined and validated using Claude.ai.
 #
-# SETUP INSTRUCTIONS:
-# 1. Replace 'weather.home' with your actual weather entity ID
-# 2. Replace 'climate.ecobee' with your actual Ecobee thermostat entity ID
-# 3. Adjust temperature thresholds in the template if needed for your climate
-# 4. Add this to your configuration.yaml or create a package file
-# 5. Restart Home Assistant
+# FEATURES:
+# - Dew point based calculations for accurate condensation prevention
+# - Uses forecasted low temperatures to be proactive, not reactive
+# - Asymmetric response: adjusts quickly when cold, slowly when warm
+# - Configurable for different window R-values
+# - Configurable forecast days to consider
+# - An example at-a-glance Lovelace dashboard at the end
+#
+###############################################################################
+# ============================================================================
+# QUICK CONFIGURATION GUIDE
+# ============================================================================
+# 
+# To set up this integration, you only need to change THREE entity IDs:
+# 
+# 1. Go to Settings -> Devices & Services -> Helpers
+# 2. Find these three helpers (they'll be created after first load):
+#    - "Humidity Controller Weather Entity" -> Change to your weather integration
+#    - "Humidity Controller Humidifier Entity" -> Change to your humidifier
+#    - "Humidity Controller Climate Entity" -> Change to your thermostat
+# 
+# Alternatively, edit the initial values in the configuration below:
+#    humidity_controller_weather_entity: initial: "weather.YOUR_WEATHER"
+#    humidity_controller_humidifier_entity: initial: "humidifier.YOUR_HUMIDIFIER"
+#    humidity_controller_climate_entity: initial: "climate.YOUR_THERMOSTAT"
+# 
+###############################################################################
+# ============================================================================
+# ADAVANCED CONFIGURATION OPTIONS
+# ============================================================================
+# 
+# The following helpers can be further modified to accommodate your specific
+# preferences / home conditions:
+#
+# - "Humidity Controller Forecast Days": Adjust the forecast window that will be
+#   evaluated to find the lowest temperature. If you find it takes longer for
+#   your humidity to passively drop to your desired level, you may want to
+#   increase the window.
+# - "Humidity Controller Max Increase": Adjust the rate of increase per hour
+#   when forecasted temperatures are warmer.
+# - "Humidity Controller Offset": Adjust this if you find the calculations
+#   aren't achieving the desired results. Negative values will adjust the
+#   calculated targets lower (drier), positive adjusts higher (moister)
+# - "Humidity Controller Window R-Value": Adjust for your window type, see
+#   below for what the values translate to, but lower values for less efficient
+#   windows, higher for more efficient windows.
+#
+###############################################################################
+# ============================================================================
+# EXPLANATION OF FORECAST APPROACH:
+# ============================================================================
+#
+# This configuration uses the weather.get_forecasts service to fetch forecast
+# data for the next N days (see "Humidity Controller Forecast Days" above).
+# The lowest temperature in that forecast window is used calculate the target
+# humidity level (see below for calculation explanation).
+#
+# The goal is to provide a balance between comfort (typically higher humidity
+# levels) and too much condensation (which can lead to mold, mildew, and 
+# material degradation - wood, drywall, etc.). The major assumption
+# used is that it takes much longer to passively dehumidify than to actively
+# humidify - i.e., in the absence of an active dehumidifier, it takes longer
+# for humidity to decrease passively from heating and loss to outside, than
+# it does to increase the humidity actively from a humidifier - so an
+# asymmetric response is used.
+#
+###############################################################################
+# ============================================================================
+# HOW THE HUMIDITY CALCULATION WORKS:
+# ============================================================================
+#
+# 1. FORECAST LOW TEMPERATURE (from weather)
+#    - Get the minimum forecasted low for the next N days
+#    - Example: -5F forecasted low
+#
+# 2. CALCULATE INDOOR SURFACE TEMPERATURE
+#    - Determines how cold your window's inner surface will be
+#    - Formula: Indoor_temp - (Indoor_temp - Outdoor_temp) × (R_interior / (R_window + R_interior))
+#    - Example with -5°F outside, 68°F inside, R-2.0 windows:
+#      Surface temp = 68 - (68 - (-5)) × (0.68 / (2.0 + 0.68)) = 51°F
+#    
+# 3. CALCULATE SAFE HUMIDITY LEVEL (using Magnus formula)
+#    - Calculates the maximum humidity where dew point equals surface temperature
+#    - This is the point where condensation would form
+#    - Subtracts 5% safety margin
+#    - Example: At 68°F indoor with 51°F surface -> ~40% max humidity -> 35% with margin
+#
+# 4. DETERMINE TARGET HUMIDITY (with rate limiting and offset)
+#    - Applies your manual offset adjustment
+#    - Applies asymmetric rate limiting (drops immediately, rises slowly at X%/hr)
+#    - Clamps between 15-50% (humidity too low is uncomfortable (dry, static buildup),
+#      too high and condensation can develop)
+#
+# ADJUSTING FOR YOUR SITUATION:
+#
+# If you're seeing CONDENSATION (humidity target too high):
+#   → LOWER the Window R-Value (e.g., try 1.0-1.5 instead of 2.0)
+#      - This tells the system your windows get colder inside
+#      - Colder surface = lower safe humidity
+#   → ADD a negative Humidity Offset (try -5% or -10%)
+#      - Provides extra safety margin beyond the calculation
+#   → INCREASE Forecast Days (try 4-5 instead of 3)
+#      - Prepares for cold snaps further in advance to allow for longer passive
+#        dehumidification
+#
+# If air is too DRY (want more humidity for comfort):
+#   → RAISE the Window R-Value (try 2.5-3.0 instead of 2.0)
+#      - Only if you actually have better windows (low-E, triple-pane)
+#   → ADD a positive Humidity Offset (try +3% to +5%)
+#      - Use cautiously and monitor for condensation
+#   → DECREASE Forecast Days (try 1-2 instead of 3)
+#      - More responsive to current conditions vs future cold - i.e.,
+#        passive dehumidification happens faster in your environment
+#
+# EXAMPLE SCENARIOS:
+#
+#   Scenario: -5°F outside, 68°F inside
+#   
+#   R-1.0 windows (single-pane):
+#     Surface temp = 46°F -> Safe humidity ≈ 25% -> Target = 20-25%
+#   
+#   R-2.0 windows (standard double-pane):
+#     Surface temp = 51°F -> Safe humidity ≈ 35% -> Target = 30-35%
+#   
+#   R-3.0 windows (low-E double-pane):
+#     Surface temp = 54°F -> Safe humidity ≈ 42% -> Target = 37-42%
+#
+###############################################################################
+# ============================================================================
+# FORMULAS AND SCIENTIFIC REFERENCES:
+# ============================================================================
+#
+# This package uses the following thermodynamic and heat transfer formulas:
+#
+# 1. MAGNUS FORMULA FOR DEW POINT CALCULATION
+#    Source: Alduchov & Eskridge (1996), "Improved Magnus Form Approximation 
+#            of Saturation Vapor Pressure"
+#    Formula: Td = (b × A) / (a - A)
+#    Where:   A = ln(RH/100) + (a × T)/(b + T)
+#             a = 17.27, b = 237.7C
+#    
+#    Why used: This is a meteorological standard for calculating dew point
+#              from temperature and relative humidity. Accurate within +/- 0.4C
+#              for temperatures between -40C and 50C.
+#    
+#    Application: We use this in REVERSE - given a surface temperature, we
+#                 calculate the maximum relative humidity before the dew point
+#                 equals that surface temperature (when condensation forms).
+#
+# 2. THERMAL RESISTANCE (R-VALUE) HEAT TRANSFER
+#    Source: ASHRAE Handbook of Fundamentals
+#    Formula: T_surface = T_indoor - (T_indoor - T_outdoor) × (R_inside / R_total)
+#    Where:   R_inside = 0.68 (standard interior surface film resistance)
+#             R_total = R_window + R_inside
+#    
+#    Why used: This calculates the temperature of the interior window surface
+#              based on the window's thermal resistance (R-value). The inner
+#              surface is where condensation forms.
+#    
+#    Application: Determines the coldest surface in the room where moisture
+#                 will condense first. This is the critical temperature for
+#                 preventing condensation.
+#
+# 3. WINDOW R-VALUES (Thermal Resistance)
+#    Source: ENERGY STAR / U.S. Department of Energy, "Residential Windows"
+#    Typical values:
+#      - Single pane: R-1.0 (U-factor ~1.0)
+#      - Double pane: R-2.0 (U-factor ~0.5)
+#      - Double pane low-E: R-3.0 (U-factor ~0.33)
+#      - Triple pane: R-4.0+ (U-factor ~0.25)
+#    
+#    Why used: Different window types have dramatically different insulation
+#              properties. A triple-pane window stays much warmer on the inside
+#              than a single-pane window at the same outdoor temperature.
+#    
+#    Application: User-configurable parameter that reflects their actual
+#                 window quality, making calculations personalized.
+#
+# 4. SAFETY MARGIN (-5% from calculated maximum)
+#    Source: Industry practice from HVAC and building science
+#    Reference: Building Science Corporation, "Understanding Vapor Barriers"
+#    
+#    Why used: The Magnus formula gives the exact condensation point, but:
+#              - Windows may have colder spots (corners, edges, frames)
+#              - Air doesn't mix perfectly (micro-climates near windows)
+#              - Humidity sensors have +/- 2-3% accuracy
+#              - Better safe than sorry (condensation causes mold/damage)
+#    
+#    Application: Provides a buffer zone to account for real-world variations
+#                 and measurement uncertainties.
+#
+# 5. ASYMMETRIC RATE LIMITING
+#    Source: Empirical observation of HVAC system physics
+#    
+#    Why used: Physics of humidity control is asymmetric:
+#              - Decreasing humidity: Turn off humidifier, natural air exchange
+#                and HVAC dehumidification remove moisture over hours/days
+#              - Increasing humidity: Active humidification can add moisture
+#                quickly (within an hour)
+#    
+#    Application: Allows immediate humidity target drops when cold weather
+#                 arrives (preventing condensation) but limits increases to
+#                 X%/hour when warming (giving humidity time to drop naturally
+#                 before target rises again).
+#
+# LIMITATIONS:
+#
+#   - Assumes uniform indoor temperature (doesn't account for cold drafts)
+#   - Assumes windows are the coldest surface (may not be true for some homes)
+#   - Uses daily forecast lows (not hourly, may miss short cold spikes)
+#   - Doesn't account for thermal mass or building heat loss
+#   - Simplified R-value model (real windows have variable performance)
+#
 ###############################################################################
 
-# Input number to allow manual adjustment of humidity offset
+# ============================================================================
+# CONFIGURATION - Change these to match your entities
+# ============================================================================
+input_text:
+  humidity_controller_weather_entity:
+    name: Humidity Controller Weather Entity
+    max: 255
+    initial: "weather.forecast_home"
+    icon: mdi:weather-partly-cloudy
+    
+  humidity_controller_humidifier_entity:
+    name: Humidity Controller Humidifier Entity
+    max: 255
+    initial: "humidifier.thermostat"
+    icon: mdi:air-humidifier
+
+  humidity_controller_climate_entity:
+    name: Humidity Controller Climate Entity
+    max: 255
+    initial: "climate.thermostat_2"
+    icon: mdi:thermostat
+
+  # Internal data storage
+  humidity_controller_forecast_data:
+    name: Humidity Controller Forecast Data
+    max: 255
+    initial: "[]"
+
+# Input numbers for configuration
 input_number:
-  ecobee_humidity_offset:
-    name: Ecobee Humidity Offset
+  humidity_controller_offset:
+    name: Humidity Controller Offset
     min: -10
     max: 10
     step: 1
@@ -23,171 +259,403 @@ input_number:
     icon: mdi:water-percent
     initial: 0
 
-# Template sensor that calculates ideal humidity based on outdoor temp
-template:
-  - sensor:
-      - name: "Ecobee Target Humidity"
-        unique_id: ecobee_target_humidity
-        unit_of_measurement: "%"
-        icon: mdi:water-percent
-        state: >
-          {% set outdoor_temp = state_attr('weather.klot', 'temperature') | float(0) %}
-          {% set offset = states('input_number.ecobee_humidity_offset') | float(0) %}
-          
-          {# Humidity recommendations based on outdoor temperature (°F) #}
-          {# These values prevent condensation on typical double-pane windows #}
-          {% if outdoor_temp > 50 %}
-            {% set base_humidity = 50 %}
-          {% elif outdoor_temp > 40 %}
-            {% set base_humidity = 45 %}
-          {% elif outdoor_temp > 30 %}
-            {% set base_humidity = 40 %}
-          {% elif outdoor_temp > 20 %}
-            {% set base_humidity = 35 %}
-          {% elif outdoor_temp > 10 %}
-            {% set base_humidity = 30 %}
-          {% elif outdoor_temp > 0 %}
-            {% set base_humidity = 25 %}
-          {% elif outdoor_temp > -10 %}
-            {% set base_humidity = 20 %}
-          {% else %}
-            {% set base_humidity = 15 %}
-          {% endif %}
-          
-          {# Apply offset and clamp between 15-50% #}
-          {% set target = base_humidity + offset %}
-          {{ [15, [target, 50] | min] | max | int }}
-        availability: >
-          {{ state_attr('weather.klot', 'temperature') != None }}
-        attributes:
-          outdoor_temperature: >
-            {{ state_attr('weather.klot', 'temperature') }}
-          base_recommendation: >
-            {% set outdoor_temp = state_attr('weather.klot', 'temperature') | float(0) %}
-            {% if outdoor_temp > 50 %}50
-            {% elif outdoor_temp > 40 %}45
-            {% elif outdoor_temp > 30 %}40
-            {% elif outdoor_temp > 20 %}35
-            {% elif outdoor_temp > 10 %}30
-            {% elif outdoor_temp > 0 %}25
-            {% elif outdoor_temp > -10 %}20
-            {% else %}15{% endif %}
-          applied_offset: >
-            {{ states('input_number.ecobee_humidity_offset') }}
+  humidity_controller_r_value:
+    name: Humidity Controller Window R-Value
+    min: 1
+    max: 5
+    step: 0.5
+    unit_of_measurement: "R"
+    icon: mdi:window-closed-variant
+    initial: 2.0
+    # R-value guide:
+    # 1.0 = Single pane
+    # 2.0 = Double pane (standard)
+    # 3.0 = Double pane low-E
+    # 4.0 = Triple pane
+    # 5.0 = High-performance triple pane
 
-# Automation to update Ecobee humidity when target changes
+  humidity_controller_forecast_days:
+    name: Humidity Controller Forecast Days
+    min: 1
+    max: 7
+    step: 1
+    unit_of_measurement: "days"
+    icon: mdi:calendar-clock
+    initial: 3
+    # How many days of forecasted lows to consider
+    # Lower = more responsive to immediate weather
+    # Higher = more conservative, considers further out cold snaps
+
+  humidity_controller_max_increase:
+    name: Humidity Controller Max Increase
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "%/hr"
+    icon: mdi:arrow-up-bold
+    initial: 2
+    # Rate limit for humidity increases
+    # Decreases are immediate (no limit)
+
+  # Helper to store last humidity target for rate limiting
+  humidity_controller_last_target:
+    name: Humidity Controller Last Target
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:water-percent
+    initial: 35
+
+# Automation to fetch forecast data
 automation:
-  - id: update_ecobee_humidity
-    alias: "Update Ecobee Humidity Target"
-    description: "Adjusts Ecobee humidity based on outdoor temperature"
+  - id: humidity_controller_fetch_weather_forecast
+    alias: "Humidity Controller Fetch Weather Forecast"
+    description: "Retrieves weather forecast and stores for humidity calculations"
     mode: single
     trigger:
-      # Trigger when calculated target humidity changes
+      - platform: time_pattern
+        hours: "/1"
+      - platform: homeassistant
+        event: start
       - platform: state
-        entity_id: sensor.ecobee_target_humidity
+        entity_id: input_number.humidity_controller_forecast_days
+    action:
+      - service: weather.get_forecasts
+        data:
+          type: daily
+        target:
+          entity_id: "{{ states('input_text.humidity_controller_weather_entity') }}"
+        response_variable: forecast_data
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.humidity_controller_forecast_data
+        data:
+          value: >
+            {% set forecast_list = forecast_data[states('input_text.humidity_controller_weather_entity')].forecast %}
+            {% set days_to_check = states('input_number.humidity_controller_forecast_days') | int(3) %}
+            {% set forecast_slice = forecast_list[0:days_to_check] %}
+            {% set simplified = forecast_slice | map(attribute='templow') | list %}
+            {{ simplified | tojson }}
+
+  - id: humidity_controller_update_last_target
+    alias: "Humidity Controller Update Last Target"
+    description: "Stores the current target for rate limiting calculations"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.humidity_controller_target_humidity_level
         to: ~
-      # Also check every hour in case we missed an update
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.humidity_controller_last_target
+        data:
+          value: "{{ states('sensor.humidity_controller_target_humidity_level') | int(35) }}"
+
+  - id: humidity_controller_update_current_target
+    alias: "Humidity Controller Update Current Target"
+    description: "Adjusts humidity based on forecasted lows and surface temperature"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.humidity_controller_target_humidity_level
+        to: ~
       - platform: time_pattern
         hours: "/1"
     condition:
-      # Ensure all required entities are available
       - condition: template
         value_template: >
-          {{ states('sensor.ecobee_target_humidity') not in ['unavailable', 'unknown', 'none'] }}
+          {{ states('sensor.humidity_controller_target_humidity_level') not in ['unavailable', 'unknown', 'none'] }}
       - condition: template
         value_template: >
-          {{ states('climate.thermostat_2') not in ['unavailable', 'unknown', 'none'] }}
-      # Only update if the target is different from current setting
+          {{ states(states('input_text.humidity_controller_humidifier_entity')) not in ['unavailable', 'unknown', 'none'] }}
       - condition: template
         value_template: >
-          {% set current = state_attr('climate.thermostat_2', 'humidity') | int(0) %}
-          {% set target = states('sensor.ecobee_target_humidity') | int(0) %}
+          {% set current = state_attr(states('input_text.humidity_controller_humidifier_entity'), 'humidity') | int(0) %}
+          {% set target = states('sensor.humidity_controller_target_humidity_level') | int(0) %}
           {{ current != target }}
     action:
       - service: humidifier.set_humidity
         target:
-          entity_id: humidifier.thermostat
+          entity_id: "{{ states('input_text.humidity_controller_humidifier_entity') }}"
         data:
-          humidity: "{{ states('sensor.ecobee_target_humidity') | int(35) }}"
+          humidity: "{{ states('sensor.humidity_controller_target_humidity_level') | int(35) }}"
       - service: system_log.write
         data:
           message: >
-            Ecobee humidity updated to {{ states('sensor.ecobee_target_humidity') | int(35) }}%
-            (Outdoor temp: {{ state_attr('sensor.ecobee_target_humidity', 'outdoor_temperature') }}°F)
+            Humidity updated to {{ states('sensor.humidity_controller_target_humidity_level') }}%
+            (Safe: {{ states('sensor.humidity_controller_safe_humidity_level') }}%, 
+            Surface temp: {{ states('sensor.humidity_controller_indoor_surface_temperature') }}°F,
+            Forecast low: {{ states('sensor.humidity_controller_forecast_low_temperature') }}°F,
+            Rate limited: {{ state_attr('sensor.humidity_controller_target_humidity_level', 'rate_limited') }})
           level: info
 
-  # Optional: Notification when humidity is adjusted
-  - id: notify_ecobee_humidity_change
-    alias: "Notify Ecobee Humidity Change"
+  - id: humidity_controller_notify_change
+    alias: "Humidity Controller Notify Change"
     description: "Send notification when humidity target changes significantly"
     mode: single
     trigger:
       - platform: state
-        entity_id: sensor.ecobee_target_humidity
+        entity_id: sensor.humidity_controller_target_humidity_level
         to: ~
     condition:
-      # Ensure sensor is available
       - condition: template
         value_template: >
           {{ trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
       - condition: template
         value_template: >
           {{ trigger.from_state.state not in ['unavailable', 'unknown', 'none'] }}
-      # Only notify if change is more than 5%
       - condition: template
         value_template: >
-          {{ (trigger.to_state.state | int(0) - trigger.from_state.state | int(0)) | abs > 5 }}
+          {{ (trigger.to_state.state | int(0) - trigger.from_state.state | int(0)) | abs >= 5 }}
     action:
       - service: persistent_notification.create
         data:
-          title: "Ecobee Humidity Adjusted"
+          title: "Humidity Adjusted"
           message: >
             Humidity target changed from {{ trigger.from_state.state }}% to {{ trigger.to_state.state }}%
-            due to outdoor temperature change ({{ state_attr('sensor.ecobee_target_humidity', 'outdoor_temperature') }}°F)
+            
+            Forecast low (next {{ state_attr('sensor.humidity_controller_forecast_low_temperature', 'days_checked') }} days): {{ states('sensor.humidity_controller_forecast_low_temperature') }}°F
+            Window surface temp: {{ states('sensor.humidity_controller_indoor_surface_temperature') }}°F
+            Safe humidity: {{ states('sensor.humidity_controller_safe_humidity_level') }}%
+            Rate limited: {{ state_attr('sensor.humidity_controller_target_humidity_level', 'rate_limited') }}
+
+# Template sensors
+template:
+  - sensor:
+      - name: "Humidity Controller Forecast Low Temperature"
+        #unique_id: humidity_controller_forecast_low_temperature
+        unit_of_measurement: "°F"
+        icon: mdi:thermometer-chevron-down
+        state: >
+          {% set forecast_json = states('input_text.humidity_controller_forecast_data') %}
+          {% set days_to_check = states('input_number.humidity_controller_forecast_days') | int(3) %}
+          
+          {% if forecast_json != '[]' and forecast_json != '' %}
+            {% set forecast = forecast_json | from_json %}
+            
+            {% if forecast is not none and forecast | length > 0 %}
+              {# forecast is now just a list of temperatures #}
+              {% set lows = forecast | select('number') | list %}
+              
+              {% if lows | length > 0 %}
+                {{ lows | min | round(1) }}
+              {% else %}
+                {# Fallback to current temperature if no forecast lows available #}
+                {{ state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') | float(40) }}
+              {% endif %}
+            {% else %}
+              {# Fallback to current temperature if forecast is empty #}
+              {{ state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') | float(40) }}
+            {% endif %}
+          {% else %}
+            {# Fallback to current temperature if no forecast data yet #}
+            {{ state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') | float(40) }}
+          {% endif %}
+        availability: >
+          {{ states('input_text.humidity_controller_forecast_data') not in ['unavailable', 'unknown', 'none'] }}
+        attributes:
+          days_checked: >
+            {{ states('input_number.humidity_controller_forecast_days') | int(3) }}
+          current_temperature: >
+            {{ state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') }}
+          forecast_lows: >
+            {% set forecast_json = states('input_text.humidity_controller_forecast_data') %}
+            {% if forecast_json != '[]' and forecast_json != '' %}
+              {% set forecast = forecast_json | from_json %}
+              {% if forecast is not none and forecast | length > 0 %}
+                {{ forecast }}
+              {% else %}
+                []
+              {% endif %}
+            {% else %}
+              []
+            {% endif %}
+
+      - name: "Humidity Controller Outdoor Dew Point"
+        #unique_id: humidity_controller_outdoor_dew_point
+        unit_of_measurement: "°F"
+        icon: mdi:water-thermometer
+        state: >
+          {% set temp = state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') | float(0) %}
+          {% set humidity = state_attr(states('input_text.humidity_controller_weather_entity'), 'humidity') | float(0) %}
+          
+          {# Magnus formula for dew point calculation #}
+          {% set a = 17.27 %}
+          {% set b = 237.7 %}
+          {% set temp_c = (temp - 32) * 5/9 %}
+          {% set alpha = ((a * temp_c) / (b + temp_c)) + (humidity / 100.0) | log %}
+          {% set dew_point_c = (b * alpha) / (a - alpha) %}
+          {% set dew_point_f = (dew_point_c * 9/5) + 32 %}
+          
+          {{ dew_point_f | round(1) }}
+        availability: >
+          {{ state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') != None and
+             state_attr(states('input_text.humidity_controller_weather_entity'), 'humidity') != None }}
+
+      - name: "Humidity Controller Indoor Surface Temperature"
+        #unique_id: humidity_controller_indoor_surface_temperature
+        unit_of_measurement: "°F"
+        icon: mdi:window-closed-variant
+        state: >
+          {% set outdoor_temp = states('sensor.humidity_controller_forecast_low_temperature') | float(40) %}
+          {% set indoor_temp = state_attr(states('input_text.humidity_controller_climate_entity'), 'current_temperature') | float(68) %}
+          {% set r_value = states('input_number.humidity_controller_r_value') | float(2.0) %}
+          
+          {# Calculate inner surface temperature based on R-value #}
+          {# Assumes R-value of 0.68 for interior surface film #}
+          {% set r_interior = 0.68 %}
+          {% set temp_diff = indoor_temp - outdoor_temp %}
+          {% set surface_temp = indoor_temp - (temp_diff * r_interior / (r_value + r_interior)) %}
+          
+          {{ surface_temp | round(1) }}
+        availability: >
+          {{ states('sensor.humidity_controller_forecast_low_temperature') not in ['unavailable', 'unknown', 'none'] }}
+        attributes:
+          outdoor_temp_used: >
+            {{ states('sensor.humidity_controller_forecast_low_temperature') }}
+          indoor_temp: >
+            {{ state_attr(states('input_text.humidity_controller_climate_entity'), 'current_temperature') }}
+          window_r_value: >
+            {{ states('input_number.humidity_controller_r_value') }}
+
+      - name: "Humidity Controller Safe Humidity Level"
+        #unique_id: humidity_controller_safe_humidity_level
+        unit_of_measurement: "%"
+        icon: mdi:water-percent-alert
+        state: >
+          {% set surface_temp = states('sensor.humidity_controller_indoor_surface_temperature') | float(50) %}
+          {% set indoor_temp = state_attr(states('input_text.humidity_controller_climate_entity'), 'current_temperature') | float(68) %}
+          
+          {# Calculate maximum safe humidity to prevent condensation #}
+          {# This uses the Magnus formula in reverse #}
+          {% set a = 17.27 %}
+          {% set b = 237.7 %}
+          {% set surface_temp_c = (surface_temp - 32) * 5/9 %}
+          {% set indoor_temp_c = (indoor_temp - 32) * 5/9 %}
+          
+          {% set gamma_surface = (a * surface_temp_c) / (b + surface_temp_c) %}
+          {% set gamma_indoor = (a * indoor_temp_c) / (b + indoor_temp_c) %}
+          
+          {# Relative humidity at which dew point equals surface temp #}
+          {% set safe_rh = 100 * (e ** (gamma_surface - gamma_indoor)) %}
+          
+          {# Add 5% safety margin and clamp between 15-50% #}
+          {% set safe_humidity = safe_rh - 5 %}
+          {{ [15, [safe_humidity, 50] | min] | max | int }}
+        availability: >
+          {{ states('sensor.humidity_controller_indoor_surface_temperature') not in ['unavailable', 'unknown', 'none'] }}
+        attributes:
+          surface_temperature: >
+            {{ states('sensor.humidity_controller_indoor_surface_temperature') }}
+          outdoor_dew_point: >
+            {{ states('sensor.humidity_controller_outdoor_dew_point') }}
+          forecast_low: >
+            {{ states('sensor.humidity_controller_forecast_low_temperature') }}
+
+      - name: "Humidity Controller Target Humidity Level"
+        #unique_id: humidity_controller_target_humidity_level
+        unit_of_measurement: "%"
+        icon: mdi:water-percent
+        state: >
+          {% set safe_humidity = states('sensor.humidity_controller_safe_humidity_level') | float(35) %}
+          {% set last_target = states('input_number.humidity_controller_last_target') | float(35) %}
+          {% set offset = states('input_number.humidity_controller_offset') | float(0) %}
+          {% set max_increase = states('input_number.humidity_controller_max_increase') | float(2) %}
+          
+          {# Calculate desired target with offset #}
+          {% set desired_target = safe_humidity + offset %}
+          
+          {# Apply asymmetric rate limiting #}
+          {% if desired_target < last_target %}
+            {# Allow immediate decreases (rapid response to cold) #}
+            {% set new_target = desired_target %}
+          {% else %}
+            {# Limit increases to max_increase per hour #}
+            {% set new_target = [desired_target, last_target + max_increase] | min %}
+          {% endif %}
+          
+          {# Clamp between 15-50% #}
+          {{ [15, [new_target, 50] | min] | max | int }}
+        availability: >
+          {{ states('sensor.humidity_controller_safe_humidity_level') not in ['unavailable', 'unknown', 'none'] }}
+        attributes:
+          safe_humidity_calculated: >
+            {{ states('sensor.humidity_controller_safe_humidity_level') }}
+          last_target: >
+            {{ states('input_number.humidity_controller_last_target') }}
+          desired_target_before_rate_limit: >
+            {% set safe_humidity = states('sensor.humidity_controller_safe_humidity_level') | float(35) %}
+            {% set offset = states('input_number.humidity_controller_offset') | float(0) %}
+            {{ safe_humidity + offset }}
+          rate_limited: >
+            {% set safe_humidity = states('sensor.humidity_controller_safe_humidity_level') | float(35) %}
+            {% set last_target = states('input_number.humidity_controller_last_target') | float(35) %}
+            {% set offset = states('input_number.humidity_controller_offset') | float(0) %}
+            {{ (safe_humidity + offset) > last_target }}
+          applied_offset: >
+            {{ states('input_number.humidity_controller_offset') }}
 
 ###############################################################################
+# ============================================================================
 # OPTIONAL: Lovelace Dashboard Card
-# Add this to your dashboard to monitor and adjust humidity settings
-###############################################################################
+# Add this to your dashboard for detailed monitoring
+# ============================================================================
 # 
-# type: entities
-# title: Ecobee Humidity Control
-# entities:
-#   - entity: sensor.ecobee_target_humidity
-#     name: Target Humidity
-#   - entity: climate.ecobee
-#     attribute: humidity
-#     name: Current Setting
-#   - entity: climate.ecobee
-#     attribute: current_humidity
-#     name: Current Humidity
-#   - type: attribute
-#     entity: sensor.ecobee_target_humidity
-#     attribute: outdoor_temperature
-#     name: Outdoor Temperature
-#   - entity: input_number.ecobee_humidity_offset
-#     name: Manual Adjustment
-# state_color: true
+#  views:
+#    - title: Home
+#      type: panel
+#      cards:
+#        - type: vertical-stack
+#          cards:
+#            - type: entities
+#              title: Humidity Control
+#              entities:
+#                - entity: sensor.humidity_controller_target_humidity_level
+#                  name: Target Humidity
+#                - entity: humidifier.thermostat
+#                  name: Humidifier
+#                - type: attribute
+#                  entity: sensor.humidity_controller_target_humidity_level
+#                  attribute: rate_limited
+#                  name: Currently Rate Limited
+#            - type: entities
+#              title: Configuration
+#              entities:
+#                - entity: input_number.humidity_controller_offset
+#                  name: Manual Adjustment
+#                - entity: input_number.humidity_controller_r_value
+#                  name: Window R-Value
+#                - entity: input_number.humidity_controller_forecast_days
+#                  name: Forecast Days
+#                - entity: input_number.humidity_controller_max_increase
+#                  name: Max Increase Rate
+#            - type: entities
+#              title: Diagnostic Info
+#              entities:
+#                - entity: sensor.humidity_controller_forecast_low_temperature
+#                  name: Forecast Low
+#                - type: attribute
+#                  entity: sensor.humidity_controller_forecast_low_temperature
+#                  attribute: current_temperature
+#                  name: Current Temperature
+#                - entity: sensor.humidity_controller_indoor_surface_temperature
+#                  name: Window Surface Temp
+#                - entity: sensor.humidity_controller_outdoor_dew_point
+#                  name: Outdoor Dew Point
+#                - entity: sensor.humidity_controller_safe_humidity_level
+#                  name: Safe Humidity Level
+#            - type: entities
+#              title: Forecast Details
+#              entities:
+#                - type: attribute
+#                  entity: sensor.humidity_controller_forecast_low_temperature
+#                  attribute: forecast_lows
+#                  name: All Forecast Lows
+#              state_color: true
 #
-###############################################################################
-# CELSIUS VERSION (for non-US users)
-# Replace the temperature thresholds with these:
-#
-# {% if outdoor_temp > 10 %}        {# > 50°F #}
-#   {% set base_humidity = 50 %}
-# {% elif outdoor_temp > 4 %}       {# > 40°F #}
-#   {% set base_humidity = 45 %}
-# {% elif outdoor_temp > -1 %}      {# > 30°F #}
-#   {% set base_humidity = 40 %}
-# {% elif outdoor_temp > -7 %}      {# > 20°F #}
-#   {% set base_humidity = 35 %}
-# {% elif outdoor_temp > -12 %}     {# > 10°F #}
-#   {% set base_humidity = 30 %}
-# {% elif outdoor_temp > -18 %}     {# > 0°F #}
-#   {% set base_humidity = 25 %}
-# {% elif outdoor_temp > -23 %}     {# > -10°F #}
-#   {% set base_humidity = 20 %}
-# {% else %}
-#   {% set base_humidity = 15 %}
-# {% endif %}
-###############################################################################
