@@ -30,6 +30,7 @@ automation:
                     - light.right_guest_bedroom_light_light_2
                 data:
                   brightness_pct: 100
+                  transition: 1
           
           # Turn off light
           - conditions:
@@ -41,3 +42,5 @@ automation:
                   entity_id: 
                     - light.left_guest_bedroom_light_light
                     - light.right_guest_bedroom_light_light_2
+                data:
+                  transition: 1
