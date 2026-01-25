@@ -46,6 +46,13 @@ logger:
       - "JSON result was not a dictionary or list with 0th element a dictionary"
     homeassistant.helpers.template:
       - "Template variable error: 'None' has no attribute 'attributes' when rendering '{{ trigger.event.data.new_state.attributes.device_class == \"moisture\" }}'"
+    plexapi:
+      - "child index out of range"
+      - "HTTPConnectionPool"
+      - "HTTPSConnectionPool"
+      - "Max retries exceeded"
+      - "Failed to resolve"
+      - "NameResolutionError"
 
 zha:
   zigpy_config:
