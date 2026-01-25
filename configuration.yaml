@@ -46,3 +46,8 @@ logger:
       - "JSON result was not a dictionary or list with 0th element a dictionary"
     homeassistant.helpers.template:
       - "Template variable error: 'None' has no attribute 'attributes' when rendering '{{ trigger.event.data.new_state.attributes.device_class == \"moisture\" }}'"
+
+zha:
+  zigpy_config:
+    ota:
+      z2m_remote_index: !secret inovelli_fw_index
