@@ -8,7 +8,7 @@
 # 
 # Once you have your desired ID you create a sensor, replacing my id (ILZ020, ILC093) with yours. The ID is case sensitive!
 # 
-# Then when you have your ID's, enter them using the inputs that are created - input.nws_zone and input.nws_county.
+# Then when you have your ID's, enter them into the configuration below.
 # 
 # These are my Zone and County IDs
 # ILZ020
@@ -172,10 +172,9 @@ input_select:
 
 rest:
   - resource: https://api.weather.gov/alerts/active/count
-    scan_interval: 60
+    scan_interval: 600
     headers:
-      User-Agent: >
-        ({{ states('input.nws_api_email') }}, {{ states('input.nws_api_host') }})
+      User-Agent: (ti@daleggetts.com, hass.home.daleggetts.com)
       Accept: application/ld+json
     sensor:
       - name: 'NWS Alert Count'
@@ -193,12 +192,10 @@ rest:
         availability: >
           {{ value_json is defined }}
         
-  - resource: >
-      https://api.weather.gov/alerts/active?zone={{ states('input_text.nws_zone') }},{{ states('input_text.nws_county') }}
-    scan_interval: 60
+  - resource: https://api.weather.gov/alerts/active?zone=ILZ020,ILC093
+    scan_interval: 600
     headers:
-      User-Agent: >
-        ({{ states('input.nws_api_email') }}, {{ states('input.nws_api_host') }})
+      User-Agent: (ti@daleggetts.com, hass.home.daleggetts.com)
       Accept: application/geo+json
     sensor:
       - name: 'NWS Alert Event 1'
