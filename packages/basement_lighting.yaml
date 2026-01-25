@@ -1,0 +1,424 @@
+input_number:
+  pool_table_area_lights_previous_value:
+    name: Pool Table Area Lights Previous Value
+    min: 0
+    max: 100
+    initial: 100
+
+switch:
+  - platform: flux
+    lights:
+      - light.basement_entertainment_light_1
+      - light.basement_entertainment_light_2
+      - light.basement_entertainment_light_3
+      - light.basement_entertainment_light_4
+    name: Basement Entertainment Flux
+    start_time: "6:00"
+    stop_time: "20:00"
+    start_colortemp: 6500
+    sunset_colortemp: 3200
+    stop_colortemp: 2000
+    brightness: 255
+    disable_brightness_adjust: true
+    mode: mired
+    transition: 30
+    interval: 60
+
+automation:
+  - id: 'turn_on_basement_stairs_lights_after_motion'
+    alias: Turn on Basement Stairs lights after motion
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.basement_stairs_motion_sensor
+        to:
+          - 'on'
+    conditions:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: media_player.plex_plex_for_samsung_tv_2025
+            state:
+              - playing
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_stairs_lights
+        data:
+          brightness_pct: 100
+          transition: 1
+    mode: single
+  - id: 'dim_basement_stairs_lights_after_no_motion'
+    alias: Dim Basement Stairs lights after no motion
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.basement_stairs_motion_sensor
+        to:
+          - 'off'
+        for:
+          hours: 0
+          minutes: 0
+          seconds: 15
+    conditions:
+      - condition: state
+        entity_id: light.basement_stairs_lights
+        state:
+          - 'on'
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_stairs_lights
+        data:
+          brightness_pct: 10
+          transition: 2
+    mode: single
+  - id: 'turn_off_basement_stairs_lights_after_no_motion'
+    alias: Turn off Basement Stairs lights after no motion
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.basement_stairs_motion_sensor
+        to:
+          - 'off'
+        for:
+          hours: 0
+          minutes: 1
+          seconds: 30
+      - trigger: state
+        entity_id:
+          - media_player.plex_plex_for_samsung_tv_2025
+        to:
+          - playing
+    actions:
+      - action: light.turn_off
+        target:
+          entity_id: light.basement_stairs_lights
+        data:
+          transition: 3
+    mode: single
+  - id: 'dim_mechanical_room_lights_after_no_motion'
+    alias: Dim Mechanical Room lights after no motion
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.mechanical_room_motion_sensor
+        to:
+          - 'off'
+        for:
+          hours: 0
+          minutes: 5
+          seconds: 0
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.mechanical_room_lights
+        data:
+          transition: 5
+          brightness_pct: 15
+    mode: single
+  - id: 'turn_on_mechanical_room_lights_after_motion'
+    alias: Turn on Mechanical Room lights after motion
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.mechanical_room_motion_sensor
+        to:
+          - 'on'
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.mechanical_room_lights
+        data:
+          brightness_pct: 100
+          transition: 2
+    mode: single
+  - id: 'turn_off_mechanical_room_lights_after_no_motion'
+    alias: Turn off Mechanical Room lights after no motion
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.mechanical_room_motion_sensor
+        to:
+          - 'off'
+        for:
+          hours: 0
+          minutes: 7
+          seconds: 0
+    actions:
+      - action: light.turn_off
+        target:
+          entity_id: light.mechanical_room_lights
+        data:
+          transition: 2
+    mode: single
+  - id: 'turn_off_basement_entertainment_area_lights'
+    alias: Turn off Basement Entertainment Area lights
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.basement_entertainment_area_lights
+        to:
+          - 'off'
+        for:
+          hours: 0
+          minutes: 1
+          seconds: 0
+    actions:
+      - action: light.turn_off
+        target:
+          entity_id:
+            - light.basement_entertainment_light_1
+            - light.basement_entertainment_light_2
+            - light.basement_entertainment_light_3
+            - light.basement_entertainment_light_4
+    mode: single
+  - id: 'dim_entertainment_area_lights_when_tv_turns_on'
+    alias: Dim Entertainment Area  Lights when TV turns on
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - media_player.basement_tv
+        to:
+          - 'on'
+    conditions:
+      - condition: state
+        entity_id: light.basement_entertainment_area_lights
+        state:
+          - 'on'
+    actions:
+      - parallel:
+        - action: light.turn_on
+          target:
+            entity_id: light.basement_entertainment_area_lights
+          data:
+            transition: 4
+            brightness_pct: 100
+        - action: light.turn_on
+          data:
+            brightness_pct: 25
+            transition: 4
+          target:
+            entity_id:
+              - light.basement_entertainment_light_1
+              - light.basement_entertainment_light_3
+        - action: light.turn_on
+          target:
+            entity_id:
+              - light.basement_entertainment_light_2
+              - light.basement_entertainment_light_4
+          data:
+            brightness_pct: 5
+            transition: 4
+    mode: single
+  - id: 'reset_basement_entertainment_area_lights_brightness'
+    alias: Reset Basement Entertainment Area Lights brightness
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - media_player.basement_tv
+        to:
+          - 'off'
+    conditions:
+      - condition: state
+        entity_id: light.basement_entertainment_area_lights
+        state:
+          - 'on'
+    actions:
+      - parallel:
+        - action: light.turn_on
+          target:
+            entity_id: light.basement_entertainment_area_lights
+          data:
+            transition: 4
+            brightness_pct: 66
+        - action: light.turn_on
+          target:
+            entity_id:
+              - light.basement_entertainment_light_1
+              - light.basement_entertainment_light_2
+              - light.basement_entertainment_light_3
+              - light.basement_entertainment_light_4
+          data:
+            brightness_pct: 100
+            transition: 4
+    mode: single
+  - id: 'change_basement_entertainment_area_lights_temperature'
+    alias: Change Basement Entertainment Area lights temperature
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.pool_table_light
+        to:
+          - 'on'
+    conditions:
+      - condition: state
+        entity_id: light.basement_entertainment_area_lights
+        state:
+          - 'on'
+    actions:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.basement_entertainment_flux
+      - action: light.turn_on
+        target:
+          entity_id:
+            - light.basement_entertainment_light_1
+            - light.basement_entertainment_light_2
+            - light.basement_entertainment_light_3
+            - light.basement_entertainment_light_4
+        data:
+          color_temp_kelvin: 3500
+          transition: 60
+    mode: single
+  - id: 'reset_basement_entertainment_area_flux'
+    alias: Reset Basement Entertainment Area Flux
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.pool_table_light
+        to:
+          - 'off'
+    conditions:
+      - condition: state
+        entity_id: light.basement_entertainment_area_lights
+        state:
+          - 'on'
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.basement_entertainment_flux
+    mode: single
+  - id: 'set_basement_entertainment_flux'
+    alias: Set Basement Entertainment Flux
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.basement_entertainment_area_lights
+        to:
+          - 'on'
+    actions:
+      - if:
+        - condition: state
+          entity_id: light.pool_table_light
+          state:
+            - 'on'
+        then:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.basement_entertainment_flux
+          - action: light.turn_on
+            target:
+              entity_id:
+                - light.basement_entertainment_light_1
+                - light.basement_entertainment_light_2
+                - light.basement_entertainment_light_3
+                - light.basement_entertainment_light_4
+            data:
+              transition: 60
+              color_temp_kelvin: 3500
+        else:
+          - action: switch.turn_on
+            target:
+              entity_id: switch.basement_entertainment_flux
+    mode: single
+  - id: 'dim_pool_table_area_lights_when_pool_table_light_turns_on'
+    alias: Dim Pool Table Area lights when Pool Table light turns on
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.pool_table_light
+        to:
+          - 'on'
+    conditions:
+      - condition: state
+        entity_id: light.pool_table_area_lights
+        state:
+          - 'on'
+    actions:
+      - sequence:
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.pool_table_area_lights_previous_value
+          data:
+            value: >-
+              {% if states('light.pool_table_area_lights') == 'off' %}
+                0
+              {% else %}
+                {{ (state_attr('light.pool_table_area_lights', 'brightness') | int / 255 * 100) | round }}
+              {% endif %}
+        - action: light.turn_on
+          target:
+            entity_id: light.pool_table_area_lights
+          data:
+            transition: 4
+            brightness_pct: 15
+    mode: single
+  - id: 'reset_pool_table_area_ligths'
+    alias: Reset Pool Table Area lights
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.pool_table_light
+        to:
+          - 'off'
+    conditions:
+      - condition: state
+        entity_id: light.pool_table_area_lights
+        state:
+          - 'on'
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.pool_table_area_lights
+        data:
+          transition: 4
+          brightness_pct: "{{ states('input_number.pool_table_area_lights_previous_value') }}"
+    mode: single
+  - id: 'dim_pool_table_area_lights_if_pool_table_light_is_on'
+    alias: Dim Pool Table Area lights if Pool Table light is on
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.pool_table_area_lights
+        to:
+          - 'on'
+    conditions:
+      - condition: state
+        entity_id: light.pool_table_light
+        state:
+          - 'on'
+    actions:
+      - sequence:
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.pool_table_area_lights_previous_value
+          data:
+            value: >-
+              {% if states('light.pool_table_area_lights') == 'off' %}
+                0
+              {% else %}
+                {{ (state_attr('light.pool_table_area_lights', 'brightness') | int / 255 * 100) | round }}
+              {% endif %}
+        - action: light.turn_on
+          target:
+            entity_id: light.pool_table_area_lights
+          data:
+            transition: 4
+            brightness_pct: 15
+    mode: single
