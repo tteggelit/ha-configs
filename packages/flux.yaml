@@ -14,18 +14,3 @@ switch:
     mode: mired
     transition: 30
     interval: 60
-#  - platform: flux
-#    lights:
-#      - light.loft_lightbulb
-#    name: Loft Flux
-#    start_time: "8:00"
-#    stop_time: "23:00"
-#    start_colortemp: 6667
-#    sunset_colortemp: 3200
-#    stop_colortemp: 2857
-#    brightness: 255
-#    disable_brightness_adjust: true
-#    mode: mired
-#    transition: 30
-#    interval: 60
-
