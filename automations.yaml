@@ -597,7 +597,16 @@
     metadata: {}
     data: {}
     target:
-      entity_id: light.kitchen_cabinet_lights
+      entity_id:
+      - light.basement_bathroom_lights
+      - light.basement_entertainment_area_lights
+      - light.basement_stairs_lights
+      - light.gym_area_lights
+      - light.kitchen_cabinet_lights
+      - light.living_room_lights
+      - light.mechanical_room_lights
+      - light.pool_table_area_lights
+      - light.pool_table_light
   mode: single
 - id: '1711216712567'
   alias: Alarm Disarmed Actions
@@ -820,19 +829,21 @@
   - metadata: {}
     data: {}
     target:
-      entity_id:
-      - light.kitchen_cabinet_lights_left_light_2
-      - light.kitchen_cabinet_lights_right_light_3
-    action: light.turn_off
-  - metadata: {}
-    data: {}
-    target:
       entity_id: switch.deck_lights
     action: switch.turn_off
   - metadata: {}
     data: {}
     target:
-      entity_id: light.living_room_lights
+      entity_id:
+      - light.basement_bathroom_lights
+      - light.basement_entertainment_area_lights
+      - light.basement_stairs_lights
+      - light.gym_area_lights
+      - light.kitchen_cabinet_lights
+      - light.living_room_lights
+      - light.mechanical_room_lights
+      - light.pool_table_area_lights
+      - light.pool_table_light
     action: light.turn_off
   mode: single
 - id: '1714824591977'
