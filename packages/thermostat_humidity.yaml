@@ -51,6 +51,9 @@
 # - "Humidity Controller Window R-Value": Adjust for your window type, see
 #   below for what the values translate to, but lower values for less efficient
 #   windows, higher for more efficient windows.
+# - "Humidity Controller Safety Margin": This adjusts the safety margin used in
+#   Magnus formula. Default is 10%. Increase if there is still moisture,
+#   decrease if it's too dry.
 #
 ###############################################################################
 # ============================================================================
@@ -273,6 +276,18 @@ input_number:
     # 3.0 = Double pane low-E
     # 4.0 = Triple pane
     # 5.0 = High-performance triple pane
+
+  humidity_controller_safety_margin:
+    name: Humidity Controller Safety Margin
+    min: 0
+    max: 20
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:shield-check
+    initial: 10
+    # Additional safety margin beyond calculations
+    # Default 10%
+    # Increase if you see condensation, decrease if too dry
 
   humidity_controller_forecast_days:
     name: Humidity Controller Forecast Days
@@ -531,6 +546,7 @@ template:
         state: >
           {% set surface_temp = states('sensor.humidity_controller_indoor_surface_temperature') | float(50) %}
           {% set indoor_temp = state_attr(states('input_text.humidity_controller_climate_entity'), 'current_temperature') | float(68) %}
+          {% set safety_margin = states('input_number.humidity_controller_safety_margin') | float(10) %}
           
           {# Calculate maximum safe humidity to prevent condensation #}
           {# This uses the Magnus formula in reverse #}
@@ -545,8 +561,8 @@ template:
           {# Relative humidity at which dew point equals surface temp #}
           {% set safe_rh = 100 * (e ** (gamma_surface - gamma_indoor)) %}
           
-          {# Add 5% safety margin and clamp between 15-50% #}
-          {% set safe_humidity = safe_rh - 5 %}
+          {# Apply configurable safety margin #}
+          {% set safe_humidity = safe_rh - safety_margin %}
           {{ [15, [safe_humidity, 50] | min] | max | int }}
         availability: >
           {{ states('sensor.humidity_controller_indoor_surface_temperature') not in ['unavailable', 'unknown', 'none'] }}
