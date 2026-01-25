@@ -61,15 +61,22 @@ sensor:
     
 # Enable logging
 logger:
+#  level: DEBUG
+  level: INFO  # Don't use DEBUG in production
+  logs:
+    # Reduce verbosity for components that might log sensitive data
+    wifi: WARN
+    api: WARN
 
 # Enable Home Assistant API
 api:
   encryption:
-    key: "uCVfalWiHUNqWEN+zOhVFYsLWGit7Ub/IdMQ07idF1A="
+    key: !secret api_key
 
 ota:
   - platform: esphome
-    password: "99667b85732e46d01ec3c76e2e7cac0a"
+    id: ota_esphome
+    password: !secret ota_password
 
 wifi:
   ssid: !secret wifi_ssid
@@ -78,7 +85,7 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Air-Quality Fallback Hotspot"
-    password: "ONSAAnCs2ZbD"
+    password: !secret wifi_ap_password
 
 captive_portal:
     
