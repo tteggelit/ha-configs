@@ -1,11 +1,9 @@
 automation:
   - alias: 'Thunderstorm Alert'
     description: >-
-      Sends tiered alerts for approaching lightning, but only if the NWS
-      forecast also shows a >50% chance of thunderstorms.
+      Sends tiered alerts for approaching lightning, but only if the forecast
+      shows a >50% chance of thunderstorms in the next 4 hours.
     trigger:
-      # This trigger will fire if lightning is detected near any of your monitored locations.
-      # Trigger IDs are added for clarity in the 'action' section.
       - platform: numeric_state
         entity_id: sensor.des_moines_lightning_distance
         below: 120
@@ -22,93 +20,89 @@ automation:
         entity_id: sensor.home_lightning_distance
         below: 25
         id: 'oswego'
-    condition:
-      # This condition checks the NWS forecast. The action below will only run if
-      # there is a >50% chance of thunderstorms in the next 4 hours.
-      - condition: template
-        value_template: >-
-          {% set weather_entity = 'weather.klot' %}
-          {% set forecast = state_attr(weather_entity, 'forecast') %}
-          {% set hours_to_check = 4 %}
-          {% set threshold = 50 %}
-          {% set storm_predicted = namespace(value=false) %}
-  
-          {% if forecast %}
-            {% for i in range(hours_to_check) %}
-              {% if forecast[i] %}
-                {% set period = forecast[i] %}
-                {% set precip_chance = period.precipitation_probability | int(0) %}
-                {% set detailed_desc = period.detailed_description | lower %}
-                {% if precip_chance > threshold and 'thunderstorm' in detailed_desc %}
-                  {% set storm_predicted.value = true %}
-                {% endif %}
+    action:
+      # Step 1: Get the forecast
+      - service: weather.get_forecasts
+        target:
+          entity_id: weather.openweathermap
+        data:
+          type: hourly
+        response_variable: weather_response
+
+      # Step 2: Check if thunderstorm is likely
+      - variables:
+          forecast: "{{ weather_response['forecast'] }}"
+          storm_predicted: >
+            {% set forecasted = false %}
+            {% for period in forecast[:4] %}
+              {% set precip_prob = (period.precipitation_probability | int(0)) %}
+              {% set condition = (period.condition | lower) %}
+              {% if precip_prob > 50 and ('thunder' in condition or 'storm' in condition or 'tstorm' in condition) %}
+                {% set forecasted = true %}
               {% endif %}
             {% endfor %}
-          {% endif %}
-  
-          {{ storm_predicted.value }}
-    action:
+            {{ forecasted }}
+
+      # Step 3: Only send alert if storm is predicted
       - choose:
-          # Case 1: Lightning near Des Moines, IA
-          - conditions:
-              - condition: trigger
-                id: 'des_moines'
+          - conditions: "{{ trigger.id == 'des_moines' }}"
             sequence:
-              - action: notify.mobile_app_tis_iphone
-                metadata: {}
-                data:
-                  title: "Distant Storm Warning (Des Moines)"
-                  message: "Confirmed storm w/ lightning near Des Moines, moving east. Estimated arrival in 4-6 hours. Time for meds!"
-                  data:
-                    push: 
-                      sound:
-                        name: default
-                        critical: 1
-                        volume: 1
-          # Case 2: Lightning near the Quad Cities
-          - conditions:
-              - condition: trigger
-                id: 'quad_cities'
+              - choose:
+                  - conditions: "{{ storm_predicted }}"
+                    sequence:
+                      - service: notify.mobile_app_tis_iphone
+                        data:
+                          title: "Distant Storm Warning (Des Moines)"
+                          message: "Confirmed storm w/ lightning near Des Moines, moving east. Estimated arrival in 4-6 hours. Time for meds!"
+                          data:
+                            push:
+                              sound:
+                                name: default
+                                critical: 1
+                                volume: 1
+
+          - conditions: "{{ trigger.id == 'quad_cities' }}"
             sequence:
-              - action: notify.mobile_app_tis_iphone
-                metadata: {}
-                data:
-                  title: "Approaching Storm (Quad Cities)"
-                  message: "Confirmed storm w/ lightning over the Quad Cities, headed your way. Estimated arrival in 2-3 hours."
-                  data:
-                    push: 
-                      sound:
-                        name: default
-                        critical: 1
-                        volume: 1
-          # Case 3: Lightning near Dixon, IL
-          - conditions:
-              - condition: trigger
-                id: 'dixon'
+              - choose:
+                  - conditions: "{{ storm_predicted }}"
+                    sequence:
+                      - service: notify.mobile_app_tis_iphone
+                        data:
+                          title: "Approaching Storm (Quad Cities)"
+                          message: "Confirmed storm w/ lightning over the Quad Cities, headed your way. Estimated arrival in 2-3 hours."
+                          data:
+                            push:
+                              sound:
+                                name: default
+                                critical: 1
+                                volume: 1
+
+          - conditions: "{{ trigger.id == 'dixon' }}"
             sequence:
-              - action: notify.mobile_app_tis_iphone
-                metadata: {}
-                data:
-                  title: "Nearby Storm (Dixon)"
-                  message: "Confirmed storm w/ lightning near Dixon. Estimated arrival in about 1 hour."
-                  data:
-                    push: 
-                      sound:
-                        name: default
-                        critical: 1
-                        volume: 1
-          # Case 4: Lightning near you in Oswego
-          - conditions:
-              - condition: trigger
-                id: 'oswego'
+              - choose:
+                  - conditions: "{{ storm_predicted }}"
+                    sequence:
+                      - service: notify.mobile_app_tis_iphone
+                        data:
+                          title: "Nearby Storm (Dixon)"
+                          message: "Confirmed storm w/ lightning near Dixon. Estimated arrival in about 1 hour."
+                          data:
+                            push:
+                              sound:
+                                name: default
+                                critical: 1
+                                volume: 1
+
+          - conditions: "{{ trigger.id == 'oswego' }}"
             sequence:
-              - action: notify.mobile_app_tis_iphone
-                metadata: {}
+              - service: notify.mobile_app_tis_iphone
                 data:
                   title: "⚡ Thunderstorm Starting!"
                   message: "Lightning detected within 25 km. The storm is here."
-        default: []
-    mode: parallel
-    max: 10
-  
-  
+                  data:
+                    push:
+                      sound:
+                        name: default
+                        critical: 1
+                        volume: 1
+    mode: single
