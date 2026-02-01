@@ -1,6 +1,127 @@
+# This package consists of a script to cycle through RGB and White colors and
+# an automation to process the button events.
+# Here are how the button events are processed:
+# Push Up           - Turn light on
+# Push Down         - Turn lights off
+# Hold Up           - Turn up the brightness to a max of 100%
+# Hold Down         - Turn down the brightness to a min of 3%
+# Push Right / Left - Cycle through RGB and White (warm, cool, bright, daylight) colors
+#
+# You will need to update the automation to reference the right device_id of the
+# remote and what lights you want to control.
+#
+# To get the `device_id` of the remote (assuming ZHA), do the following:
+# 1. Pair the remote as normal with ZHA
+# 2. Once paired, go to Developer Tools and select Events
+# 3. Listen for `zha_event` events
+# 4. Push a button on the remote and you should see an event. Copy the `device_id`
+
+# Scripts
+script:
+  cycle_aidans_fan_light_color:
+    alias: Cycle Aidan's Fan Light Color
+    mode: restart
+    fields:
+      entity_id:
+        description: The light entity to control
+        example: light.aidan_s_fan_light_1
+      direction:
+        description: Direction to cycle (forward or backward)
+        example: forward
+    sequence:
+      - variables:
+          # Use the first light to determine current state
+          reference_light: "{{ entity_id[0] if entity_id is sequence and entity_id is not string else entity_id }}"
+          current_hs: "{{ state_attr(reference_light, 'hs_color') }}"
+          current_temp: "{{ state_attr(reference_light, 'color_temp') }}"
+          current_mode: "{{ state_attr(reference_light, 'color_mode') }}"
+          
+          # Define color sequence with whites
+          colors:
+            - name: red
+              hs: [0, 100]
+            - name: orange
+              hs: [30, 100]
+            - name: yellow
+              hs: [60, 100]
+            - name: green
+              hs: [120, 100]
+            - name: cyan
+              hs: [180, 100]
+            - name: blue
+              hs: [240, 100]
+            - name: purple
+              hs: [280, 100]
+            - name: magenta
+              hs: [320, 100]
+            - name: warm_white
+              color_temp_kelvin: 2700
+            - name: cool_white
+              color_temp_kelvin: 4000
+            - name: bright_white
+              color_temp_kelvin: 5000
+            - name: daylight
+              color_temp_kelvin: 6500
+          
+          # Find current index
+          current_index: >
+            {% if current_mode == 'color_temp' %}
+              {% set temp_kelvin = state_attr(reference_light, 'color_temp_kelvin') | int(0) %}
+              {% if temp_kelvin == 0 %}
+                {% set temp_kelvin = (1000000 / (current_temp | int(370))) | int %}
+              {% endif %}
+              {% if temp_kelvin <= 3350 %}8
+              {% elif temp_kelvin <= 4500 %}9
+              {% elif temp_kelvin <= 5500 %}10
+              {% else %}11
+              {% endif %}
+            {% elif current_hs %}
+              {% set hue = current_hs[0] | int %}
+              {% if hue < 15 %}0
+              {% elif hue < 45 %}1
+              {% elif hue < 90 %}2
+              {% elif hue < 150 %}3
+              {% elif hue < 210 %}4
+              {% elif hue < 260 %}5
+              {% elif hue < 300 %}6
+              {% else %}7
+              {% endif %}
+            {% else %}0
+            {% endif %}
+          
+          next_index: >
+            {% if direction == 'forward' %}
+              {{ (current_index | int + 1) % 12 }}
+            {% else %}
+              {{ (current_index | int - 1) % 12 }}
+            {% endif %}
+      
+      - choose:
+          # RGB colors (indices 0-7)
+          - conditions:
+              - condition: template
+                value_template: "{{ next_index | int < 8 }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  hs_color: "{{ colors[next_index | int].hs }}"
+          
+          # White colors (indices 8-11)
+          - conditions:
+              - condition: template
+                value_template: "{{ next_index | int >= 8 }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  color_temp_kelvin: "{{ colors[next_index | int].color_temp_kelvin }}"
+
 # Automations
 automation:
-  - alias: IKEA Styrbar - Guest Bedroom Side Lights Control
+  - alias: IKEA Styrbar - Aidan's Fan Light Control
     description: Control RGB light with Styrbar remote
     mode: restart
     trigger:
@@ -16,6 +137,41 @@ automation:
           device_id: 4e2a160e99cbbef2818d673685056bf0
           command: "off"
         id: button_off
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: 4e2a160e99cbbef2818d673685056bf0
+          command: move_with_on_off
+          args: [0, 83]
+        id: brightness_up
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: 4e2a160e99cbbef2818d673685056bf0
+          command: move
+          args: [1, 83, 0, 0]
+        id: brightness_down
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: 4e2a160e99cbbef2818d673685056bf0
+          command: stop
+          args: [0, 0]
+        id: brightness_stop
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: 4e2a160e99cbbef2818d673685056bf0
+          command: press
+          args: [257, 13, 0]
+        id: color_left
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_id: 4e2a160e99cbbef2818d673685056bf0
+          command: press
+          args: [256, 13, 0]
+        id: color_right
     action:
       - choose:
           # Turn on light
@@ -25,12 +181,15 @@ automation:
             sequence:
               - service: light.turn_on
                 target:
-                  entity_id: 
-                    - light.left_guest_bedroom_light_light
-                    - light.right_guest_bedroom_light_light_2
+                  entity_id:
+                    - light.aidan_s_fan_light_1
+                    - light.aidan_s_fan_light_2
+                    - light.aidan_s_fan_light_3
+                    - light.aidan_s_fan_light_4
+                    - light.aidan_s_fan_light_5
+                    - light.aidan_s_fan_light_6
                 data:
                   brightness_pct: 100
-                  transition: 1
           
           # Turn off light
           - conditions:
@@ -39,8 +198,103 @@ automation:
             sequence:
               - service: light.turn_off
                 target:
-                  entity_id: 
-                    - light.left_guest_bedroom_light_light
-                    - light.right_guest_bedroom_light_light_2
+                  entity_id:
+                    - light.aidan_s_fan_light_1
+                    - light.aidan_s_fan_light_2
+                    - light.aidan_s_fan_light_3
+                    - light.aidan_s_fan_light_4
+                    - light.aidan_s_fan_light_5
+                    - light.aidan_s_fan_light_6
+          
+          # Brightness up (hold top button)
+          - conditions:
+              - condition: trigger
+                id: brightness_up
+            sequence:
+              - repeat:
+                  while:
+                    - condition: template
+                      value_template: >
+                        {{ state_attr('light.aidan_s_fan_light_1', 'brightness') | int(0) < 255 }}
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id:
+                          - light.aidan_s_fan_light_1
+                          - light.aidan_s_fan_light_2
+                          - light.aidan_s_fan_light_3
+                          - light.aidan_s_fan_light_4
+                          - light.aidan_s_fan_light_5
+                          - light.aidan_s_fan_light_6
+                      data:
+                        brightness_step_pct: 10
+                    - delay:
+                        milliseconds: 200
+          
+          # Brightness down (hold bottom button)
+          - conditions:
+              - condition: trigger
+                id: brightness_down
+            sequence:
+              - repeat:
+                  while:
+                    - condition: template
+                      value_template: >
+                        {{ state_attr('light.aidan_s_fan_light_1', 'brightness') | int(0) > 23 }}
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id:
+                          - light.aidan_s_fan_light_1
+                          - light.aidan_s_fan_light_2
+                          - light.aidan_s_fan_light_3
+                          - light.aidan_s_fan_light_4
+                          - light.aidan_s_fan_light_5
+                          - light.aidan_s_fan_light_6
+                      data:
+                        brightness_step_pct: -10
+                    - delay:
+                        milliseconds: 200
+              - service: light.turn_on
+                target:
+                  entity_id:
+                    - light.aidan_s_fan_light_1
+                    - light.aidan_s_fan_light_2
+                    - light.aidan_s_fan_light_3
+                    - light.aidan_s_fan_light_4
+                    - light.aidan_s_fan_light_5
+                    - light.aidan_s_fan_light_6
                 data:
-                  transition: 1
+                  brightness_pct: 3
+          
+          # Cycle color forward (right arrow)
+          - conditions:
+              - condition: trigger
+                id: color_right
+            sequence:
+              - service: script.cycle_aidans_fan_light_color
+                data:
+                  entity_id:
+                    - light.aidan_s_fan_light_1
+                    - light.aidan_s_fan_light_2
+                    - light.aidan_s_fan_light_3
+                    - light.aidan_s_fan_light_4
+                    - light.aidan_s_fan_light_5
+                    - light.aidan_s_fan_light_6
+                  direction: forward
+          
+          # Cycle color backward (left arrow)
+          - conditions:
+              - condition: trigger
+                id: color_left
+            sequence:
+              - service: script.cycle_aidans_fan_light_color
+                data:
+                  entity_id:
+                    - light.aidan_s_fan_light_1
+                    - light.aidan_s_fan_light_2
+                    - light.aidan_s_fan_light_3
+                    - light.aidan_s_fan_light_4
+                    - light.aidan_s_fan_light_5
+                    - light.aidan_s_fan_light_6
+                  direction: backward
