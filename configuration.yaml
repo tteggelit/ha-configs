@@ -55,6 +55,8 @@ logger:
       - "NameResolutionError"
 
 zha:
+  custom_quirks_path: /config/zhacustomquirks/inovelli
   zigpy_config:
+    source_routing: true
     ota:
       z2m_remote_index: !secret inovelli_fw_index
