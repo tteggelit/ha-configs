@@ -45,6 +45,8 @@ wifi:
     ssid: "BTProxy2 Fallback Hotspot"
     password: !secret wifi_ap_password
 
+captive_portal:
+    
 esp32_ble:
   max_connections: ${connections}
 
