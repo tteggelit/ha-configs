@@ -364,7 +364,7 @@ automation:
     condition:
       - condition: template
         value_template: >
-          {{ trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
+          {{ trigger.to_state is not none and trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
     action:
       - service: input_number.set_value
         target:
@@ -421,10 +421,10 @@ automation:
     condition:
       - condition: template
         value_template: >
-          {{ trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
+          {{ trigger.to_state is not none and trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
       - condition: template
         value_template: >
-          {{ trigger.from_state.state not in ['unavailable', 'unknown', 'none'] }}
+          {{ trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown', 'none'] }}
       - condition: template
         value_template: >
           {{ (trigger.to_state.state | int(0) - trigger.from_state.state | int(0)) | abs >= 5 }}
