@@ -3,14 +3,14 @@ todo_test:
   sequence:
   - variables:
       project:
-        entity_id: todo.personal
+        entity_id: todo.personal_2
         name: Personal
-  - service: todo.get_items
-    target:
+  - target:
       entity_id: '{{ project.entity_id }}'
     data:
       status: needs_action
     response_variable: all_todos
+    action: todo.get_items
   - variables:
       threshold: 20
       exclude:
@@ -53,19 +53,19 @@ todo_test:
         todo not in all_todos[project.entity_id]['items']|map(attribute='summary')
         -%}\n    {% set result.todos = result.todos + [todo] -%}\n  {% endif -%}\n{%
         endfor -%} {{ result.todos }}"
-  - service: notify.mobile_app_tis_iphone
-    data:
+  - data:
       message: '{{ new_todos | join(''
 
         '') }}'
+    action: notify.mobile_app_tis_iphone
   - repeat:
       for_each: '{{ new_todos }}'
       sequence:
-      - service: todoist.new_task
-        data:
+      - data:
           project: '{{ project.name }}'
           content: '{{ repeat.item }}'
           due_date_string: tomorrow at 9:00
+        action: todoist.new_task
   mode: single
   icon: mdi:checkbox-marked-circle-auto-outline
 manually_water_vegetable_garden:
