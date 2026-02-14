@@ -607,6 +607,9 @@
       - light.mechanical_room_lights
       - light.pool_table_area_lights
       - light.pool_table_light
+      - light.guest_bedroom_lights
+      - light.left_guest_bedroom_light_light
+      - light.right_guest_bedroom_light_light_2
   mode: single
 - id: '1711216712567'
   alias: Alarm Disarmed Actions
@@ -813,11 +816,30 @@
               critical: 1
               volume: 1
       action: notify.mobile_app_amys_iphone
-  - action: media_player.turn_off
-    metadata: {}
-    data: {}
-    target:
+  - if:
+    - condition: state
       entity_id: media_player.living_room_tv
+      state:
+      - 'on'
+    then:
+    - action: media_player.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id: media_player.living_room_tv
+    alias: If the living room TV is on, turn it off
+  - if:
+    - condition: state
+      entity_id: media_player.basement_tv
+      state:
+      - 'on'
+    then:
+    - action: media_player.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id: media_player.u8000f8836
+    alias: If the basement TV is on, turn it off
   - action: switch.turn_off
     metadata: {}
     data: {}
@@ -844,6 +866,9 @@
       - light.mechanical_room_lights
       - light.pool_table_area_lights
       - light.pool_table_light
+      - light.guest_bedroom_lights
+      - light.left_guest_bedroom_light_light
+      - light.right_guest_bedroom_light_light_2
     action: light.turn_off
   mode: single
 - id: '1714824591977'
@@ -1029,3 +1054,51 @@
       light:
         entity_id: light.aidan_s_night_stand_light
       button_left_short: []
+- id: '1771026441200'
+  alias: Turn off guest bedroom flux
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - light.guest_bedroom_lights
+    to:
+    - 'off'
+  conditions: []
+  actions:
+  - action: switch.turn_off
+    metadata: {}
+    target:
+      entity_id: switch.guest_bedroom_flux
+    data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      entity_id:
+      - light.left_guest_bedroom_light_light
+      - light.right_guest_bedroom_light_light_2
+    data: {}
+  mode: single
+- id: '1771026500916'
+  alias: Turn on guest bedroom flux
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - light.guest_bedroom_lights
+    to:
+    - 'on'
+  conditions: []
+  actions:
+  - action: switch.turn_on
+    metadata: {}
+    target:
+      entity_id: switch.guest_bedroom_flux
+    data: {}
+  - action: light.turn_on
+    metadata: {}
+    target:
+      entity_id:
+      - light.left_guest_bedroom_light_light
+      - light.right_guest_bedroom_light_light_2
+    data: {}
+  mode: single
