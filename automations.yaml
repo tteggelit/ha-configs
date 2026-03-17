@@ -1102,3 +1102,88 @@
       - light.right_guest_bedroom_light_light_2
     data: {}
   mode: single
+- id: '1771104382981'
+  alias: Turn on Basement Bathroom lights with motion
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.basement_bathroom_motion_sensor
+    to:
+    - 'on'
+  conditions: []
+  actions:
+  - action: light.turn_on
+    metadata: {}
+    target:
+      entity_id: light.basement_bathroom_lights
+    data:
+      transition: 0
+      brightness_pct: 52
+  mode: single
+- id: '1771104559312'
+  alias: Dim Basement Bathroom lights when no motion
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.basement_bathroom_motion_sensor
+    to:
+    - 'off'
+  conditions: []
+  actions:
+  - action: light.turn_on
+    metadata: {}
+    target:
+      entity_id: light.basement_bathroom_lights
+    data:
+      transition: 5
+      brightness_pct: 30
+  mode: single
+- id: '1771104628644'
+  alias: Turn off Basement Bathroom lights when no motion
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.basement_bathroom_motion_sensor
+    to:
+    - 'off'
+    for:
+      hours: 0
+      minutes: 0
+      seconds: 30
+  conditions: []
+  actions:
+  - action: light.turn_off
+    metadata: {}
+    target:
+      entity_id: light.basement_bathroom_lights
+    data:
+      transition: 3
+  mode: single
+- id: '1771255663573'
+  alias: Set Basemetnt Entertainment lights brightness
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - light.basement_entertainment_area_lights
+    to:
+    - 'on'
+  conditions: []
+  actions:
+  - if:
+    - condition: state
+      entity_id: media_player.u8000f8836
+      state:
+      - 'on'
+    then:
+    - action: script.dim_basement_entertainment_lights_for_watching_tv
+      metadata: {}
+      data: {}
+    else:
+    - action: script.reset_basement_entertainment_lights
+      metadata: {}
+      data: {}
+  mode: single

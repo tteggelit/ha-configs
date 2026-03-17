@@ -181,7 +181,7 @@ automation:
             - light.basement_entertainment_light_4
     mode: single
   - id: 'dim_entertainment_area_lights_when_tv_turns_on'
-    alias: Dim Entertainment Area  Lights when TV turns on
+    alias: Dim Entertainment Area Lights when TV turns on
     description: ''
     triggers:
       - trigger: state
@@ -195,29 +195,28 @@ automation:
         state:
           - 'on'
     actions:
-      - parallel:
-        - action: light.turn_on
-          target:
-            entity_id: light.basement_entertainment_area_lights
-          data:
-            transition: 4
-            brightness_pct: 100
-        - action: light.turn_on
-          data:
-            brightness_pct: 25
-            transition: 4
-          target:
-            entity_id:
-              - light.basement_entertainment_light_1
-              - light.basement_entertainment_light_3
-        - action: light.turn_on
-          target:
-            entity_id:
-              - light.basement_entertainment_light_2
-              - light.basement_entertainment_light_4
-          data:
-            brightness_pct: 5
-            transition: 4
+      - action: script.dim_basement_entertainment_lights_for_watching_tv
+        metadata: {}
+        data: {}
+    mode: single
+  - id: 'dim_entertainment_area_lights_if_the_tv_is_on'
+    alias: Dim Entertainment Area Lights if the TV is on
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.basement_entertainment_area_lights
+        to:
+          - 'on'
+    conditions:
+      - condition: state
+        entity_id: media_player.basement_tv
+        state:
+          - 'on'
+    actions:
+      - action: script.dim_basement_entertainment_lights_for_watching_tv
+        metadata: {}
+        data: {}
     mode: single
   - id: 'reset_basement_entertainment_area_lights_brightness'
     alias: Reset Basement Entertainment Area Lights brightness
@@ -234,23 +233,28 @@ automation:
         state:
           - 'on'
     actions:
-      - parallel:
-        - action: light.turn_on
-          target:
-            entity_id: light.basement_entertainment_area_lights
-          data:
-            transition: 4
-            brightness_pct: 66
-        - action: light.turn_on
-          target:
-            entity_id:
-              - light.basement_entertainment_light_1
-              - light.basement_entertainment_light_2
-              - light.basement_entertainment_light_3
-              - light.basement_entertainment_light_4
-          data:
-            brightness_pct: 100
-            transition: 4
+      - action: script.reset_basement_entertainment_lights
+        metadata: {}
+        data: {}
+    mode: single
+  - id: 'reset_basement_entertainment_area_lights_brightness_if_tv_is_off'
+    alias: Reset Basement Entertainment Area Lights brightness if TV is off
+    description: ''
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.basement_entertainment_area_lights
+        to:
+          - 'on'
+    conditions:
+      - condition: state
+        entity_id: media_player.basement_tv
+        state:
+          - 'off'
+    actions:
+      - action: script.reset_basement_entertainment_lights
+        metadata: {}
+        data: {}
     mode: single
   - id: 'change_basement_entertainment_area_lights_temperature'
     alias: Change Basement Entertainment Area lights temperature
