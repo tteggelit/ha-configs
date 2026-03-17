@@ -1,0 +1,19 @@
+template:
+  - trigger:
+      - platform: time_pattern
+        minutes: "/15"
+      - platform: homeassistant
+        event: start
+    action:
+      - service: weather.get_forecasts
+        target:
+          entity_id: weather.openweathermap
+        data:
+          type: hourly
+        response_variable: hourly
+    sensor:
+      - name: "OWM Hourly Forecast"
+        unique_id: owm_hourly_forecast
+        state: "{{ now().isoformat() }}"
+        attributes:
+          forecast: "{{ hourly['weather.openweathermap']['forecast'][:8] }}"
