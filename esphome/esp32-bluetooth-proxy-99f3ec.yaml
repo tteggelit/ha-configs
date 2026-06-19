@@ -14,8 +14,11 @@ esphome:
 
 esp32:
   board: ${board}
+  cpu_frequency: 160MHZ
   framework:
     type: esp-idf
+    advanced:
+      sram1_as_iram: true
   
 ota:
   - platform: esphome
