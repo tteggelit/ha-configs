@@ -16,9 +16,10 @@ esphome:
 esp32:
   board: ${board}
   variant: ${variant}
+  cpu_frequency: 160MHZ
   framework:
     type: esp-idf
-  
+ 
 ota:
   - platform: esphome
     password: !secret ota_password
