@@ -1,0 +1,1709 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Home Assistant Package: Irrigation Automation
+#
+# Self-contained — all required helpers are defined here. No separate helper
+# creation needed. Just install the package and restart HA.
+#
+# Installation:
+#   1. Place this file at: config/packages/irrigation_package.yaml
+#   2. In configuration.yaml add (if not already present):
+#        homeassistant:
+#          packages: !include_dir_named packages/
+#   3. Full HA restart required (not just reload)
+#
+# ── Customization ─────────────────────────────────────────────────────────────
+#   Before deploying, update the two sections marked CONFIGURE:
+#
+#   1. CONFIGURE: Notify device options and mapping
+#      In the template sensor named "Irrigation Notify Targets Resolved":
+#        - Update the 'options' list on input_select.irrigation_notify_device
+#          to match your actual device names (human-readable)
+#        - Update the device_map dict to map those names to notify entity IDs
+#
+#   2. CONFIGURE: Required integrations
+#      weather.klot  — NWS hourly (primary forecast)
+#      weather.forecast_home  — Met.no (secondary forecast)
+#      Confirm these entity IDs match your HA instance.
+#
+# ── Required scripts (created separately from the Cycle & Soak blueprint) ─────
+#   script.back_vegetable_garden_irrigation
+#   script.side_vegetable_garden_irrigation
+#   script.front_garden_irrigation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# =============================================================================
+# HELPERS
+# All input_* helpers needed by the irrigation system defined inline.
+# =============================================================================
+
+input_boolean:
+
+  irrigation_running:
+    name: Irrigation Running
+    icon: mdi:water-pump
+
+  irrigation_cancel:
+    name: Irrigation Cancel
+    icon: mdi:stop-circle
+
+  rain_delay_active:
+    name: Rain Delay Active
+    icon: mdi:weather-rainy
+
+  irrigation_debug:
+    name: Irrigation Debug Logging
+    icon: mdi:bug
+
+  irrigation_force_watering_enabled:
+    name: Irrigation Force Watering Enabled
+    icon: mdi:calendar-refresh
+
+
+input_number:
+
+  irrigation_cycle_counter:
+    name: Irrigation Cycle Counter
+    min: 0
+    max: 10
+    step: 1
+    mode: box
+    icon: mdi:counter
+
+  irrigation_pause_days:
+    name: Irrigation Pause Duration
+    min: 0
+    max: 30
+    step: 1
+    unit_of_measurement: days
+    mode: box
+    icon: mdi:pause-circle
+
+  irrigation_force_watering_days:
+    name: Irrigation Force Watering Interval
+    min: 1
+    max: 14
+    step: 1
+    unit_of_measurement: days
+    mode: box
+    icon: mdi:calendar-clock
+
+
+input_datetime:
+
+  irrigation_season_start:
+    name: Irrigation Season Start
+    has_date: true
+    has_time: false
+    icon: mdi:calendar-start
+
+  irrigation_season_end:
+    name: Irrigation Season End
+    has_date: true
+    has_time: false
+    icon: mdi:calendar-end
+
+  back_garden_last_watered:
+    name: Back Garden Last Watered
+    has_date: true
+    has_time: true
+    icon: mdi:history
+
+  side_garden_last_watered:
+    name: Side Garden Last Watered
+    has_date: true
+    has_time: true
+    icon: mdi:history
+
+  front_garden_last_watered:
+    name: Front Garden Last Watered
+    has_date: true
+    has_time: true
+    icon: mdi:history
+
+  irrigation_pause_until:
+    name: Irrigation Pause Until
+    has_date: true
+    has_time: true
+    icon: mdi:clock-end
+
+
+input_select:
+
+  irrigation_notify_device:
+    name: Irrigation Notify Device
+    icon: mdi:bell
+    # ── CONFIGURE ─────────────────────────────────────────────────────────────
+    # Update this list to match your devices. These are the human-readable
+    # labels that appear in the dashboard dropdown. They must exactly match
+    # the keys in the device_map defined in the template sensor below.
+    # "All Devices" and "None" are special values handled in the mapping.
+    # ─────────────────────────────────────────────────────────────────────────
+    options:
+      - "All Devices"
+      - "Ti's iPhone"
+      - "Amy's iPhone"
+      - "None"
+    initial: "All Devices"
+
+
+input_button:
+
+  irrigation_refresh_forecast_cache:
+    name: Refresh Forecast Cache Now
+    icon: mdi:refresh
+
+
+# =============================================================================
+# TEMPLATE SENSORS
+# =============================================================================
+
+template:
+
+  # ===========================================================================
+  # FORECAST CACHE SENSORS (trigger-based)
+  #
+  # Uses weather.get_forecasts service (HA 2024.3+) to fetch hourly forecast
+  # data. The static sensor approach using state_attr(weather_entity, 'forecast')
+  # no longer works in modern HA — the forecast attribute was deprecated and
+  # removed in 2024.3.
+  #
+  # IMPORTANT: the raw forecast list is NOT stored as an attribute — a full
+  # multi-day hourly forecast exceeds HA's 16KB attribute size limit, which
+  # causes recorder warnings and prevents history from being stored. Instead,
+  # the four numbers actually needed (max probability and total precipitation
+  # for the 24h and 48h windows) are computed here and stored directly as
+  # small numeric attributes.
+  #
+  # Forecast entries are accessed with .get(key, default) throughout because
+  # NWS forecast entries do NOT include a 'precipitation' (amount) key — only
+  # 'precipitation_probability'. Accessing a missing key via dot notation
+  # (f.precipitation) throws UndefinedError in HA's strict Jinja2 environment;
+  # .get() with a default avoids this for any provider that omits the field.
+  #
+  # The homeassistant-start trigger fires very early in HA's boot sequence,
+  # often before cloud-polled integrations (NWS, Met.no) have finished loading.
+  # A short delay is added on that trigger only, and continue_on_error ensures
+  # a failed/missing-entity call degrades to safe zero values instead of
+  # throwing template errors in every downstream consumer.
+  # ===========================================================================
+
+  - trigger:
+      - trigger: time_pattern
+        hours: "/1"
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.irrigation_refresh_forecast_cache
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay:
+              seconds: 45
+      - service: weather.get_forecasts
+        target:
+          entity_id: weather.klot
+        data:
+          type: hourly
+        response_variable: nws_data
+        continue_on_error: true
+      - variables:
+          nws_ok: >
+            {{ nws_data is defined and nws_data is mapping
+               and 'weather.klot' in nws_data
+               and nws_data['weather.klot'].get('forecast') is not none }}
+          nws_raw: >
+            {{ nws_data['weather.klot'].forecast if nws_ok else [] }}
+          nws_prob_24h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(max=0) %}
+            {% for f in nws_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% if p > ns.max %}{% set ns.max = p %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.max }}
+          nws_precip_24h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(tot=0) %}
+            {% for f in nws_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set ns.tot = ns.tot + (f.get('precipitation', 0) | float(0)) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.tot | round(2) }}
+          nws_prob_48h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set h48 = now_ts + 172800 %}
+            {% set ns = namespace(max=0) %}
+            {% for f in nws_raw %}
+              {% set ft = as_timestamp(f.datetime) %}
+              {% if ft > h24 and ft <= h48 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% if p > ns.max %}{% set ns.max = p %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.max }}
+          nws_precip_48h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set h48 = now_ts + 172800 %}
+            {% set ns = namespace(tot=0) %}
+            {% for f in nws_raw %}
+              {% set ft = as_timestamp(f.datetime) %}
+              {% if ft > h24 and ft <= h48 %}
+                {% set ns.tot = ns.tot + (f.get('precipitation', 0) | float(0)) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.tot | round(2) }}
+          nws_imminent_heavy_rain_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(found=false) %}
+            {% for f in nws_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% set a = f.get('precipitation', 0) | float(0) %}
+                {% if p > 80 and a > 0.5 %}{% set ns.found = true %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.found }}
+    sensor:
+      - name: "Irrigation NWS Forecast Cache"
+        unique_id: irrigation_nws_forecast_cache
+        icon: mdi:weather-cloudy-clock
+        state: "{{ now().isoformat() }}"
+        attributes:
+          data_ok: "{{ nws_ok }}"
+          prob_24h: "{{ nws_prob_24h_calc | int(0) }}"
+          precip_24h: "{{ nws_precip_24h_calc | float(0) }}"
+          prob_48h: "{{ nws_prob_48h_calc | int(0) }}"
+          precip_48h: "{{ nws_precip_48h_calc | float(0) }}"
+          imminent_heavy_rain_24h: "{{ nws_imminent_heavy_rain_calc }}"
+
+  - trigger:
+      - trigger: time_pattern
+        hours: "/1"
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.irrigation_refresh_forecast_cache
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay:
+              seconds: 45
+      - service: weather.get_forecasts
+        target:
+          entity_id: weather.forecast_home
+        data:
+          type: hourly
+        response_variable: met_data
+        continue_on_error: true
+      - variables:
+          met_ok: >
+            {{ met_data is defined and met_data is mapping
+               and 'weather.forecast_home' in met_data
+               and met_data['weather.forecast_home'].get('forecast') is not none }}
+          met_raw: >
+            {{ met_data['weather.forecast_home'].forecast if met_ok else [] }}
+          met_prob_24h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(max=0) %}
+            {% for f in met_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% if p > ns.max %}{% set ns.max = p %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.max }}
+          met_precip_24h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(tot=0) %}
+            {% for f in met_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set ns.tot = ns.tot + (f.get('precipitation', 0) | float(0)) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.tot | round(2) }}
+          met_prob_48h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set h48 = now_ts + 172800 %}
+            {% set ns = namespace(max=0) %}
+            {% for f in met_raw %}
+              {% set ft = as_timestamp(f.datetime) %}
+              {% if ft > h24 and ft <= h48 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% if p > ns.max %}{% set ns.max = p %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.max }}
+          met_precip_48h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set h48 = now_ts + 172800 %}
+            {% set ns = namespace(tot=0) %}
+            {% for f in met_raw %}
+              {% set ft = as_timestamp(f.datetime) %}
+              {% if ft > h24 and ft <= h48 %}
+                {% set ns.tot = ns.tot + (f.get('precipitation', 0) | float(0)) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.tot | round(2) }}
+          met_imminent_heavy_rain_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(found=false) %}
+            {% for f in met_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% set a = f.get('precipitation', 0) | float(0) %}
+                {% if p > 80 and a > 0.5 %}{% set ns.found = true %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.found }}
+    sensor:
+      - name: "Irrigation Met.no Forecast Cache"
+        # NOTE: HA auto-generates this entity's entity_id from the friendly
+        # name above, converting the period in "Met.no" to an underscore.
+        # The resulting entity_id is sensor.irrigation_met_no_forecast_cache
+        # (NOT sensor.irrigation_met_forecast_cache, despite unique_id below).
+        # Do not "fix" the references elsewhere in this file to drop the
+        # "_no_" — that was the original bug.
+        unique_id: irrigation_met_forecast_cache
+        icon: mdi:weather-cloudy-clock
+        state: "{{ now().isoformat() }}"
+        attributes:
+          data_ok: "{{ met_ok }}"
+          prob_24h: "{{ met_prob_24h_calc | int(0) }}"
+          precip_24h: "{{ met_precip_24h_calc | float(0) }}"
+          prob_48h: "{{ met_prob_48h_calc | int(0) }}"
+          precip_48h: "{{ met_precip_48h_calc | float(0) }}"
+          imminent_heavy_rain_24h: "{{ met_imminent_heavy_rain_calc }}"
+
+  - sensor:
+
+      # =======================================================================
+      # NOTIFY TARGETS RESOLVER
+      #
+      # Maps the human-readable selection from input_select.irrigation_notify_device
+      # to one or more notify entity IDs.
+      #
+      # State:      JSON list of resolved notify entity IDs (as a string)
+      # Attribute:  targets — Python list, directly usable in for_each templates
+      #
+      # ── CONFIGURE ───────────────────────────────────────────────────────────
+      # Update device_map to match your devices:
+      #   Key:   exactly matches an option in input_select.irrigation_notify_device
+      #   Value: list of notify entity IDs for that selection
+      #
+      # "All Devices" should list every individual device's notify entity.
+      # "None" maps to an empty list — no notifications sent.
+      # Individual device entries list only that device's entity.
+      # ────────────────────────────────────────────────────────────────────────
+      - name: "Irrigation Notify Targets Resolved"
+        unique_id: irrigation_notify_targets_resolved
+        icon: mdi:bell-check
+        state: >
+          {% set device_map = {
+            "All Devices": [
+              "notify.mobile_app_tis_iphone",
+              "notify.mobile_app_amys_iphone"
+            ],
+            "Ti's iPhone": [
+              "notify.mobile_app_tis_iphone"
+            ],
+            "Amy's iPhone": [
+              "notify.mobile_app_amys_iphone"
+            ],
+            "None": []
+          } %}
+          {% set selection = states('input_select.irrigation_notify_device') %}
+          {% set targets = device_map.get(selection, []) %}
+          {{ targets | tojson }}
+        attributes:
+          targets: >
+            {% set device_map = {
+              "All Devices": [
+                "notify.mobile_app_tis_iphone",
+                "notify.mobile_app_amys_iphone"
+              ],
+              "Ti's iPhone": [
+                "notify.mobile_app_tis_iphone"
+              ],
+              "Amy's iPhone": [
+                "notify.mobile_app_amys_iphone"
+              ],
+              "None": []
+            } %}
+            {% set selection = states('input_select.irrigation_notify_device') %}
+            {{ device_map.get(selection, []) }}
+          selected_device: "{{ states('input_select.irrigation_notify_device') }}"
+
+      # =======================================================================
+      # BACK VEGETABLE GARDEN — 5 sensors
+      # Sensors: sensor.back_vegetable_garden_moisture_sensor_[1-5]_soil_moisture
+      # Quorum:  minimum 3 of 5 required
+      # =======================================================================
+
+      - name: "Back Garden Moisture Mean"
+        unique_id: back_garden_moisture_mean
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        icon: mdi:water-percent
+        state: >
+          {% set sensors = [
+            states('sensor.back_vegetable_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_3_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_4_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_5_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list %}
+          {% if valid | count >= 3 %}
+            {{ (valid | sum / valid | count) | round(1) }}
+          {% else %}
+            unavailable
+          {% endif %}
+
+      - name: "Back Garden Quorum"
+        unique_id: back_garden_quorum
+        icon: mdi:check-network
+        state: >
+          {% set sensors = [
+            states('sensor.back_vegetable_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_3_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_4_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_5_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list | count %}
+          {% if valid >= 3 %}ok{% else %}fault{% endif %}
+        attributes:
+          valid_sensors: >
+            {% set sensors = [
+              states('sensor.back_vegetable_garden_moisture_sensor_1_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_2_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_3_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_4_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_5_soil_moisture')
+            ] %}
+            {{ sensors
+              | reject('in', ['unavailable','unknown','none',''])
+              | map('float', -1)
+              | reject('equalto', -1)
+              | reject('equalto', 0.0)
+              | reject('equalto', 100.0)
+              | list | count }}
+          total_sensors: 5
+          offline_sensors: >
+            {% set sensors = [
+              states('sensor.back_vegetable_garden_moisture_sensor_1_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_2_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_3_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_4_soil_moisture'),
+              states('sensor.back_vegetable_garden_moisture_sensor_5_soil_moisture')
+            ] %}
+            {{ sensors
+              | select('in', ['unavailable','unknown','none',''])
+              | list | count }}
+          sensor_status: >
+            {% set sensors = {
+              'Sensor 1': states('sensor.back_vegetable_garden_moisture_sensor_1_soil_moisture'),
+              'Sensor 2': states('sensor.back_vegetable_garden_moisture_sensor_2_soil_moisture'),
+              'Sensor 3': states('sensor.back_vegetable_garden_moisture_sensor_3_soil_moisture'),
+              'Sensor 4': states('sensor.back_vegetable_garden_moisture_sensor_4_soil_moisture'),
+              'Sensor 5': states('sensor.back_vegetable_garden_moisture_sensor_5_soil_moisture')
+            } %}
+            {% set ns = namespace(lines=[]) %}
+            {% for name, val in sensors.items() %}
+              {% if val in ['unavailable','unknown','none',''] %}
+                {% set ns.lines = ns.lines + [name ~ ': offline (' ~ val ~ ')'] %}
+              {% elif val | float(-1) in [0.0, 100.0] %}
+                {% set ns.lines = ns.lines + [name ~ ': ' ~ val ~ '% (stuck — excluded)'] %}
+              {% else %}
+                {% set ns.lines = ns.lines + [name ~ ': ' ~ val ~ '% (online)'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.lines }}
+
+      - name: "Back Garden Dryness Factor"
+        unique_id: back_garden_dryness_factor
+        icon: mdi:thermometer-alert
+        state: >
+          {% set m = states('sensor.back_garden_moisture_mean') | float(-1) %}
+          {% if m < 0 %}unknown
+          {% elif m > 70 %}-1
+          {% elif m >= 50 %}0
+          {% elif m >= 35 %}1
+          {% elif m >= 20 %}2
+          {% else %}3
+          {% endif %}
+
+      # =======================================================================
+      # SIDE VEGETABLE GARDEN — 4 sensors
+      # All 4 sensors use the _soil_moisture suffix (Z2M naming, post ZHA migration)
+      # Quorum:  minimum 3 of 4 required
+      # =======================================================================
+
+      - name: "Side Garden Moisture Mean"
+        unique_id: side_garden_moisture_mean
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        icon: mdi:water-percent
+        state: >
+          {% set sensors = [
+            states('sensor.side_vegetable_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_3_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_4_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list %}
+          {% if valid | count >= 3 %}
+            {{ (valid | sum / valid | count) | round(1) }}
+          {% else %}
+            unavailable
+          {% endif %}
+
+      - name: "Side Garden Quorum"
+        unique_id: side_garden_quorum
+        icon: mdi:check-network
+        state: >
+          {% set sensors = [
+            states('sensor.side_vegetable_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_3_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_4_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list | count %}
+          {% if valid >= 3 %}ok{% else %}fault{% endif %}
+        attributes:
+          valid_sensors: >
+            {% set sensors = [
+              states('sensor.side_vegetable_garden_moisture_sensor_1_soil_moisture'),
+              states('sensor.side_vegetable_garden_moisture_sensor_2_soil_moisture'),
+              states('sensor.side_vegetable_garden_moisture_sensor_3_soil_moisture'),
+              states('sensor.side_vegetable_garden_moisture_sensor_4_soil_moisture')
+            ] %}
+            {{ sensors
+              | reject('in', ['unavailable','unknown','none',''])
+              | map('float', -1)
+              | reject('equalto', -1)
+              | reject('equalto', 0.0)
+              | reject('equalto', 100.0)
+              | list | count }}
+          total_sensors: 4
+          offline_sensors: >
+            {% set sensors = [
+              states('sensor.side_vegetable_garden_moisture_sensor_1_soil_moisture'),
+              states('sensor.side_vegetable_garden_moisture_sensor_2_soil_moisture'),
+              states('sensor.side_vegetable_garden_moisture_sensor_3_soil_moisture'),
+              states('sensor.side_vegetable_garden_moisture_sensor_4_soil_moisture')
+            ] %}
+            {{ sensors
+              | select('in', ['unavailable','unknown','none',''])
+              | list | count }}
+          sensor_status: >
+            {% set sensors = {
+              'Sensor 1': states('sensor.side_vegetable_garden_moisture_sensor_1_soil_moisture'),
+              'Sensor 2': states('sensor.side_vegetable_garden_moisture_sensor_2_soil_moisture'),
+              'Sensor 3': states('sensor.side_vegetable_garden_moisture_sensor_3_soil_moisture'),
+              'Sensor 4': states('sensor.side_vegetable_garden_moisture_sensor_4_soil_moisture')
+            } %}
+            {% set ns = namespace(lines=[]) %}
+            {% for name, val in sensors.items() %}
+              {% if val in ['unavailable','unknown','none',''] %}
+                {% set ns.lines = ns.lines + [name ~ ': offline (' ~ val ~ ')'] %}
+              {% elif val | float(-1) in [0.0, 100.0] %}
+                {% set ns.lines = ns.lines + [name ~ ': ' ~ val ~ '% (stuck — excluded)'] %}
+              {% else %}
+                {% set ns.lines = ns.lines + [name ~ ': ' ~ val ~ '% (online)'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.lines }}
+
+      - name: "Side Garden Dryness Factor"
+        unique_id: side_garden_dryness_factor
+        icon: mdi:thermometer-alert
+        state: >
+          {% set m = states('sensor.side_garden_moisture_mean') | float(-1) %}
+          {% if m < 0 %}unknown
+          {% elif m > 70 %}-1
+          {% elif m >= 50 %}0
+          {% elif m >= 35 %}1
+          {% elif m >= 20 %}2
+          {% else %}3
+          {% endif %}
+
+      # =======================================================================
+      # FRONT GARDEN — 3 sensors (2 front beds + 1 floating bed, same valve)
+      # Quorum:  minimum 2 of 3 required
+      # =======================================================================
+
+      - name: "Front Garden Moisture Mean"
+        unique_id: front_garden_moisture_mean
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        icon: mdi:water-percent
+        state: >
+          {% set sensors = [
+            states('sensor.front_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.front_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.floating_garden_moisture_sensor_1_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list %}
+          {% if valid | count >= 2 %}
+            {{ (valid | sum / valid | count) | round(1) }}
+          {% else %}
+            unavailable
+          {% endif %}
+
+      - name: "Front Garden Quorum"
+        unique_id: front_garden_quorum
+        icon: mdi:check-network
+        state: >
+          {% set sensors = [
+            states('sensor.front_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.front_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.floating_garden_moisture_sensor_1_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list | count %}
+          {% if valid >= 2 %}ok{% else %}fault{% endif %}
+        attributes:
+          valid_sensors: >
+            {% set sensors = [
+              states('sensor.front_garden_moisture_sensor_1_soil_moisture'),
+              states('sensor.front_garden_moisture_sensor_2_soil_moisture'),
+              states('sensor.floating_garden_moisture_sensor_1_soil_moisture')
+            ] %}
+            {{ sensors
+              | reject('in', ['unavailable','unknown','none',''])
+              | map('float', -1)
+              | reject('equalto', -1)
+              | reject('equalto', 0.0)
+              | reject('equalto', 100.0)
+              | list | count }}
+          total_sensors: 3
+          offline_sensors: >
+            {% set sensors = [
+              states('sensor.front_garden_moisture_sensor_1_soil_moisture'),
+              states('sensor.front_garden_moisture_sensor_2_soil_moisture'),
+              states('sensor.floating_garden_moisture_sensor_1_soil_moisture')
+            ] %}
+            {{ sensors
+              | select('in', ['unavailable','unknown','none',''])
+              | list | count }}
+          sensor_status: >
+            {% set sensors = {
+              'Front Bed 1': states('sensor.front_garden_moisture_sensor_1_soil_moisture'),
+              'Front Bed 2': states('sensor.front_garden_moisture_sensor_2_soil_moisture'),
+              'Floating Bed': states('sensor.floating_garden_moisture_sensor_1_soil_moisture')
+            } %}
+            {% set ns = namespace(lines=[]) %}
+            {% for name, val in sensors.items() %}
+              {% if val in ['unavailable','unknown','none',''] %}
+                {% set ns.lines = ns.lines + [name ~ ': offline (' ~ val ~ ')'] %}
+              {% elif val | float(-1) in [0.0, 100.0] %}
+                {% set ns.lines = ns.lines + [name ~ ': ' ~ val ~ '% (stuck — excluded)'] %}
+              {% else %}
+                {% set ns.lines = ns.lines + [name ~ ': ' ~ val ~ '% (online)'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.lines }}
+
+      - name: "Front Garden Dryness Factor"
+        unique_id: front_garden_dryness_factor
+        icon: mdi:thermometer-alert
+        state: >
+          {% set m = states('sensor.front_garden_moisture_mean') | float(-1) %}
+          {% if m < 0 %}unknown
+          {% elif m > 70 %}-1
+          {% elif m >= 50 %}0
+          {% elif m >= 35 %}1
+          {% elif m >= 20 %}2
+          {% else %}3
+          {% endif %}
+
+      # =======================================================================
+      # WEATHER DECISION SENSOR
+      # Primary:   weather.klot (NWS)
+      # Secondary: weather.forecast_home (Met.no)
+      # Aggressive policy: both sources must agree for rain_factor > 0.
+      #
+      # Reads forecast data from sensor.irrigation_nws_forecast_cache and
+      # sensor.irrigation_met_no_forecast_cache — trigger-based sensors defined
+      # below that call weather.get_forecasts hourly. This avoids relying on
+      # the deprecated forecast attribute on weather entities (removed in
+      # HA 2024.3+).
+      # =======================================================================
+
+      - name: "Irrigation Rain Factor"
+        unique_id: irrigation_rain_factor
+        icon: mdi:weather-rainy
+        state: >
+          {% set nws_prob24 = state_attr('sensor.irrigation_nws_forecast_cache', 'prob_24h') | int(0) %}
+          {% set nws_prec24 = state_attr('sensor.irrigation_nws_forecast_cache', 'precip_24h') | float(0) %}
+          {% set nws_prob48 = state_attr('sensor.irrigation_nws_forecast_cache', 'prob_48h') | int(0) %}
+          {% set nws_prec48 = state_attr('sensor.irrigation_nws_forecast_cache', 'precip_48h') | float(0) %}
+          {% set met_prob24 = state_attr('sensor.irrigation_met_no_forecast_cache', 'prob_24h') | int(0) %}
+          {% set met_prec24 = state_attr('sensor.irrigation_met_no_forecast_cache', 'precip_24h') | float(0) %}
+          {% set met_prob48 = state_attr('sensor.irrigation_met_no_forecast_cache', 'prob_48h') | int(0) %}
+          {% set met_prec48 = state_attr('sensor.irrigation_met_no_forecast_cache', 'precip_48h') | float(0) %}
+          {% if nws_prob24 > 70 and nws_prec24 > 0.25
+             and met_prob24 > 70 and met_prec24 > 0.25 %}
+            2
+          {% elif nws_prob24 > 40 and nws_prec24 > 0.25
+              and met_prob24 > 40 and met_prec24 > 0.25 %}
+            1
+          {% elif nws_prob48 > 70 and nws_prec48 > 0.25
+              and met_prob48 > 70 and met_prec48 > 0.25 %}
+            1
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          nws_prob_24h: >
+            {{ state_attr('sensor.irrigation_nws_forecast_cache', 'prob_24h') | int(0) }}
+          nws_precip_24h: >
+            {{ state_attr('sensor.irrigation_nws_forecast_cache', 'precip_24h') | float(0) }}
+          met_prob_24h: >
+            {{ state_attr('sensor.irrigation_met_no_forecast_cache', 'prob_24h') | int(0) }}
+          met_precip_24h: >
+            {{ state_attr('sensor.irrigation_met_no_forecast_cache', 'precip_24h') | float(0) }}
+          nws_data_ok: >
+            {{ state_attr('sensor.irrigation_nws_forecast_cache', 'data_ok') }}
+          met_data_ok: >
+            {{ state_attr('sensor.irrigation_met_no_forecast_cache', 'data_ok') }}
+          nws_last_updated: >
+            {{ states('sensor.irrigation_nws_forecast_cache') }}
+          met_last_updated: >
+            {{ states('sensor.irrigation_met_no_forecast_cache') }}
+
+      # =======================================================================
+      # PER-ZONE NET URGENCY SCORES
+      # Net score = dryness_factor - rain_factor (floored at -1)
+      # ≤ 0: do nothing | 1: 2-cycle run | ≥ 2: 3-cycle run
+      # =======================================================================
+
+      - name: "Back Garden Irrigation Urgency"
+        unique_id: back_garden_irrigation_urgency
+        icon: mdi:sprout
+        state: >
+          {% set dry = states('sensor.back_garden_dryness_factor') | int(-99) %}
+          {% set rain = states('sensor.irrigation_rain_factor') | int(0) %}
+          {% if dry == -99 %}unknown
+          {% else %}{{ [dry - rain, -1] | max }}
+          {% endif %}
+
+      - name: "Side Garden Irrigation Urgency"
+        unique_id: side_garden_irrigation_urgency
+        icon: mdi:sprout
+        state: >
+          {% set dry = states('sensor.side_garden_dryness_factor') | int(-99) %}
+          {% set rain = states('sensor.irrigation_rain_factor') | int(0) %}
+          {% if dry == -99 %}unknown
+          {% else %}{{ [dry - rain, -1] | max }}
+          {% endif %}
+
+      - name: "Front Garden Irrigation Urgency"
+        unique_id: front_garden_irrigation_urgency
+        icon: mdi:sprout
+        state: >
+          {% set dry = states('sensor.front_garden_dryness_factor') | int(-99) %}
+          {% set rain = states('sensor.irrigation_rain_factor') | int(0) %}
+          {% if dry == -99 %}unknown
+          {% else %}{{ [dry - rain, -1] | max }}
+          {% endif %}
+
+      # =======================================================================
+      # IRRIGATION SYSTEM STATUS — consolidated display sensor
+      # =======================================================================
+
+      - name: "Irrigation System Status"
+        unique_id: irrigation_system_status
+        icon: mdi:water-pump
+        state: >
+          {% if is_state('input_boolean.irrigation_running', 'on') %}
+            watering
+          {% elif is_state('input_boolean.rain_delay_active', 'on') %}
+            rain delay
+          {% elif states('input_number.irrigation_pause_days') | int(0) > 0
+              and now() < states('input_datetime.irrigation_pause_until')
+                | as_datetime | as_local %}
+            paused
+          {% elif now().date() < as_datetime(states('input_datetime.irrigation_season_start')).date()
+              or now().date() > as_datetime(states('input_datetime.irrigation_season_end')).date() %}
+            off season
+          {% else %}
+            idle
+          {% endif %}
+
+
+# =============================================================================
+# TOGGLE SCRIPTS
+# One script per zone acts as a smart toggle — starts the irrigation script
+# if the zone is idle, or triggers cancellation if it is already running.
+# Dashboard cards call these directly with a single static service call,
+# avoiding the need for Jinja2 templates inside tap_action fields (which
+# Mushroom template cards do not evaluate in action definitions).
+# =============================================================================
+
+script:
+
+  irrigation_toggle_back_garden:
+    alias: "Irrigation Toggle — Back Garden"
+    icon: mdi:sprout
+    sequence:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: script.back_vegetable_garden_irrigation
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.irrigation_cancel
+        default:
+          - service: script.turn_on
+            target:
+              entity_id: script.back_vegetable_garden_irrigation
+    mode: single
+
+  irrigation_toggle_side_garden:
+    alias: "Irrigation Toggle — Side Garden"
+    icon: mdi:carrot
+    sequence:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: script.side_vegetable_garden_irrigation
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.irrigation_cancel
+        default:
+          - service: script.turn_on
+            target:
+              entity_id: script.side_vegetable_garden_irrigation
+    mode: single
+
+  irrigation_toggle_front_garden:
+    alias: "Irrigation Toggle — Front Garden"
+    icon: mdi:flower
+    sequence:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: script.front_garden_irrigation
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.irrigation_cancel
+        default:
+          - service: script.turn_on
+            target:
+              entity_id: script.front_garden_irrigation
+    mode: single
+
+
+# =============================================================================
+# AUTOMATIONS
+#
+# Notification pattern used throughout:
+#   state_attr('sensor.irrigation_notify_targets_resolved', 'targets') returns
+#   a list of notify entity IDs based on the current input_select selection.
+#   repeat.for_each iterates this list, sending one notify.send_message per
+#   target. When "None" is selected the list is empty and no notifications fire.
+# =============================================================================
+
+automation:
+
+  # ===========================================================================
+  # ZONE: Back Vegetable Garden — Evaluate and Water
+  # Triggers every 2 hours at :00. Watering window: 05:00–09:00.
+  # ===========================================================================
+
+  - id: irrigation_back_garden_evaluate
+    alias: "Irrigation — Back Garden: Evaluate and Water"
+    description: >
+      Checks urgency score for the back vegetable garden and runs the
+      watering script with 3 cycles (urgency >= 2) or 2 cycles (urgency = 1).
+      When input_boolean.irrigation_debug is on, logs the result of every gate
+      condition and the watering decision to the HA log.
+    triggers:
+      - trigger: time_pattern
+        hours: "/2"
+        minutes: "0"
+    actions:
+      - variables:
+          zone: "Back Garden"
+          in_season: >
+            {{ now().date() >= as_datetime(states('input_datetime.irrigation_season_start')).date()
+               and now().date() <= as_datetime(states('input_datetime.irrigation_season_end')).date() }}
+          in_window: >
+            {{ now().hour >= 5 and now().hour < 9 }}
+          not_paused: >
+            {{ states('input_number.irrigation_pause_days') | int(0) == 0
+               or now() >= states('input_datetime.irrigation_pause_until') | as_datetime | as_local }}
+          no_rain_delay: >
+            {{ is_state('input_boolean.rain_delay_active', 'off') }}
+          lock_free: >
+            {{ is_state('input_boolean.irrigation_running', 'off') }}
+          hours_since_watered: >
+            {% set last = states('input_datetime.back_garden_last_watered') %}
+            {% if last in ['unknown','unavailable',''] %}999
+            {% else %}{{ ((now() - last | as_datetime | as_local).total_seconds() / 3600) | round(1) }}{% endif %}
+          not_watered_recently: >
+            {{ hours_since_watered | float(999) > 24 }}
+          force_watering_enabled: >
+            {{ is_state('input_boolean.irrigation_force_watering_enabled', 'on') }}
+          force_watering_hours: >
+            {{ (states('input_number.irrigation_force_watering_days') | float(2)) * 24 }}
+          overdue: >
+            {{ force_watering_enabled and hours_since_watered | float(999) > force_watering_hours }}
+          quorum_ok: >
+            {{ is_state('sensor.back_garden_quorum', 'ok') }}
+          urgency: >
+            {{ states('sensor.back_garden_irrigation_urgency') | int(0) }}
+          moisture_mean: >
+            {{ states('sensor.back_garden_moisture_mean') }}
+          dryness_factor: >
+            {{ states('sensor.back_garden_dryness_factor') }}
+          rain_factor: >
+            {{ states('sensor.irrigation_rain_factor') }}
+          nws_prob: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'nws_prob_24h') }}
+          nws_precip: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'nws_precip_24h') }}
+          met_prob: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'met_prob_24h') }}
+          met_precip: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'met_precip_24h') }}
+          last_watered: >
+            {{ states('input_datetime.back_garden_last_watered') }}
+          valid_sensors: >
+            {{ state_attr('sensor.back_garden_quorum', 'valid_sensors') }}
+          total_sensors: >
+            {{ state_attr('sensor.back_garden_quorum', 'total_sensors') }}
+          season_start: >
+            {{ states('input_datetime.irrigation_season_start') }}
+          season_end: >
+            {{ states('input_datetime.irrigation_season_end') }}
+          pause_days: >
+            {{ states('input_number.irrigation_pause_days') | int(0) }}
+
+      # Debug: log all gate condition results on every trigger
+      - if:
+          - condition: state
+            entity_id: input_boolean.irrigation_debug
+            state: "on"
+        then:
+          - service: logbook.log
+            data:
+              name: "Irrigation Debug"
+              message: >
+                {{ zone }} evaluated at {{ now().strftime('%H:%M') }}.
+                Season {{ season_start }}→{{ season_end }}: {{ in_season }}.
+                Window(05-09h): {{ in_window }}.
+                Paused({{ pause_days }}d): {{ not not_paused }}.
+                Rain delay: {{ not no_rain_delay }}.
+                Lock held: {{ not lock_free }}.
+                Watered recently: {{ not not_watered_recently }} (last: {{ last_watered }}).
+                Quorum {{ valid_sensors }}/{{ total_sensors }}: {{ quorum_ok }}.
+                Moisture: {{ moisture_mean }}% | Dryness: {{ dryness_factor }}.
+                NWS: {{ nws_prob }}%/{{ nws_precip }}" Met: {{ met_prob }}%/{{ met_precip }}".
+                Rain factor: {{ rain_factor }} | Urgency: {{ urgency }}.
+                GATE RESULT: {{ 'PASS-normal' if (in_season and in_window and not_paused and no_rain_delay and lock_free and not_watered_recently and quorum_ok and urgency >= 1) else 'PASS-overdue' if (in_season and in_window and not_paused and no_rain_delay and lock_free and quorum_ok and overdue and rain_factor | int(0) < 2) else 'BLOCK' }}.
+                Hours since watered: {{ hours_since_watered }}h | Force watering enabled: {{ force_watering_enabled }} (threshold {{ force_watering_hours }}h) | Overdue: {{ overdue }}.
+              entity_id: input_boolean.irrigation_debug
+
+      # Gate check — all conditions must pass to proceed
+      - condition: template
+        value_template: >
+          {{ in_season and in_window and not_paused and no_rain_delay
+             and lock_free and quorum_ok
+             and ((not_watered_recently and urgency >= 1)
+                  or (overdue and rain_factor | int(0) < 2)) }}
+
+      # Debug: log that all gates passed and what action will be taken
+      - if:
+          - condition: state
+            entity_id: input_boolean.irrigation_debug
+            state: "on"
+        then:
+          - service: logbook.log
+            data:
+              name: "Irrigation Debug"
+              message: >
+                {{ zone }}: gates PASSED. Urgency={{ urgency }}.
+                Decision: {{ 'FULL 3-cycle (overdue)' if (overdue and urgency < 1) else 'FULL 3-cycle' if urgency >= 2 else 'REDUCED 2-cycle' }}.
+              entity_id: input_boolean.irrigation_debug
+
+      - choose:
+          # Overdue (force-watering interval exceeded, if enabled) and no strong rain forecast
+          - conditions:
+              - condition: template
+                value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
+                    last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
+                    full 3-cycle run.
+                  level: warning
+              - service: script.back_vegetable_garden_irrigation
+                data: {}
+          # Normal path — urgency >= 2: full run
+          - conditions:
+              - condition: template
+                value_template: "{{ urgency >= 2 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} urgency {{ urgency }} —
+                    full 3-cycle run.
+                  level: warning
+              - service: script.back_vegetable_garden_irrigation
+                data: {}
+          # Normal path — urgency == 1: reduced run
+          - conditions:
+              - condition: template
+                value_template: "{{ urgency == 1 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} urgency {{ urgency }} —
+                    reduced 2-cycle run.
+                  level: info
+              - service: script.back_vegetable_garden_irrigation
+                data:
+                  num_cycles: 2
+    mode: single
+
+  # ===========================================================================
+  # ZONE: Side Vegetable Garden — Evaluate and Water
+  # Triggers every 2 hours at :30. Watering window: 05:00–09:00.
+  # ===========================================================================
+
+  - id: irrigation_side_garden_evaluate
+    alias: "Irrigation — Side Garden: Evaluate and Water"
+    description: >
+      Checks urgency score for the side vegetable garden and runs the
+      watering script with 3 cycles (urgency >= 2) or 2 cycles (urgency = 1).
+      When input_boolean.irrigation_debug is on, logs the result of every gate
+      condition and the watering decision to the HA log.
+    triggers:
+      - trigger: time_pattern
+        hours: "/2"
+        minutes: "30"
+    actions:
+      - variables:
+          zone: "Side Garden"
+          in_season: >
+            {{ now().date() >= as_datetime(states('input_datetime.irrigation_season_start')).date()
+               and now().date() <= as_datetime(states('input_datetime.irrigation_season_end')).date() }}
+          in_window: >
+            {{ now().hour >= 5 and now().hour < 9 }}
+          not_paused: >
+            {{ states('input_number.irrigation_pause_days') | int(0) == 0
+               or now() >= states('input_datetime.irrigation_pause_until') | as_datetime | as_local }}
+          no_rain_delay: >
+            {{ is_state('input_boolean.rain_delay_active', 'off') }}
+          lock_free: >
+            {{ is_state('input_boolean.irrigation_running', 'off') }}
+          hours_since_watered: >
+            {% set last = states('input_datetime.side_garden_last_watered') %}
+            {% if last in ['unknown','unavailable',''] %}999
+            {% else %}{{ ((now() - last | as_datetime | as_local).total_seconds() / 3600) | round(1) }}{% endif %}
+          not_watered_recently: >
+            {{ hours_since_watered | float(999) > 24 }}
+          force_watering_enabled: >
+            {{ is_state('input_boolean.irrigation_force_watering_enabled', 'on') }}
+          force_watering_hours: >
+            {{ (states('input_number.irrigation_force_watering_days') | float(2)) * 24 }}
+          overdue: >
+            {{ force_watering_enabled and hours_since_watered | float(999) > force_watering_hours }}
+          quorum_ok: >
+            {{ is_state('sensor.side_garden_quorum', 'ok') }}
+          urgency: >
+            {{ states('sensor.side_garden_irrigation_urgency') | int(0) }}
+          moisture_mean: >
+            {{ states('sensor.side_garden_moisture_mean') }}
+          dryness_factor: >
+            {{ states('sensor.side_garden_dryness_factor') }}
+          rain_factor: >
+            {{ states('sensor.irrigation_rain_factor') }}
+          nws_prob: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'nws_prob_24h') }}
+          nws_precip: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'nws_precip_24h') }}
+          met_prob: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'met_prob_24h') }}
+          met_precip: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'met_precip_24h') }}
+          last_watered: >
+            {{ states('input_datetime.side_garden_last_watered') }}
+          valid_sensors: >
+            {{ state_attr('sensor.side_garden_quorum', 'valid_sensors') }}
+          total_sensors: >
+            {{ state_attr('sensor.side_garden_quorum', 'total_sensors') }}
+          season_start: >
+            {{ states('input_datetime.irrigation_season_start') }}
+          season_end: >
+            {{ states('input_datetime.irrigation_season_end') }}
+          pause_days: >
+            {{ states('input_number.irrigation_pause_days') | int(0) }}
+
+      - if:
+          - condition: state
+            entity_id: input_boolean.irrigation_debug
+            state: "on"
+        then:
+          - service: logbook.log
+            data:
+              name: "Irrigation Debug"
+              message: >
+                {{ zone }} evaluated at {{ now().strftime('%H:%M') }}.
+                Season {{ season_start }}→{{ season_end }}: {{ in_season }}.
+                Window(05-09h): {{ in_window }}.
+                Paused({{ pause_days }}d): {{ not not_paused }}.
+                Rain delay: {{ not no_rain_delay }}.
+                Lock held: {{ not lock_free }}.
+                Watered recently: {{ not not_watered_recently }} (last: {{ last_watered }}).
+                Quorum {{ valid_sensors }}/{{ total_sensors }}: {{ quorum_ok }}.
+                Moisture: {{ moisture_mean }}% | Dryness: {{ dryness_factor }}.
+                NWS: {{ nws_prob }}%/{{ nws_precip }}" Met: {{ met_prob }}%/{{ met_precip }}".
+                Rain factor: {{ rain_factor }} | Urgency: {{ urgency }}.
+                GATE RESULT: {{ 'PASS-normal' if (in_season and in_window and not_paused and no_rain_delay and lock_free and not_watered_recently and quorum_ok and urgency >= 1) else 'PASS-overdue' if (in_season and in_window and not_paused and no_rain_delay and lock_free and quorum_ok and overdue and rain_factor | int(0) < 2) else 'BLOCK' }}.
+                Hours since watered: {{ hours_since_watered }}h | Force watering enabled: {{ force_watering_enabled }} (threshold {{ force_watering_hours }}h) | Overdue: {{ overdue }}.
+              entity_id: input_boolean.irrigation_debug
+
+      - condition: template
+        value_template: >
+          {{ in_season and in_window and not_paused and no_rain_delay
+             and lock_free and quorum_ok
+             and ((not_watered_recently and urgency >= 1)
+                  or (overdue and rain_factor | int(0) < 2)) }}
+
+      - if:
+          - condition: state
+            entity_id: input_boolean.irrigation_debug
+            state: "on"
+        then:
+          - service: logbook.log
+            data:
+              name: "Irrigation Debug"
+              message: >
+                {{ zone }}: gates PASSED. Urgency={{ urgency }}.
+                Decision: {{ 'FULL 3-cycle (overdue)' if (overdue and urgency < 1) else 'FULL 3-cycle' if urgency >= 2 else 'REDUCED 2-cycle' }}.
+              entity_id: input_boolean.irrigation_debug
+
+      - choose:
+          # Overdue (force-watering interval exceeded, if enabled) and no strong rain forecast
+          - conditions:
+              - condition: template
+                value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
+                    last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
+                    full 3-cycle run.
+                  level: warning
+              - service: script.side_vegetable_garden_irrigation
+                data: {}
+          # Normal path — urgency >= 2: full run
+          - conditions:
+              - condition: template
+                value_template: "{{ urgency >= 2 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} urgency {{ urgency }} —
+                    full 3-cycle run.
+                  level: warning
+              - service: script.side_vegetable_garden_irrigation
+                data: {}
+          # Normal path — urgency == 1: reduced run
+          - conditions:
+              - condition: template
+                value_template: "{{ urgency == 1 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} urgency {{ urgency }} —
+                    reduced 2-cycle run.
+                  level: info
+              - service: script.side_vegetable_garden_irrigation
+                data:
+                  num_cycles: 2
+    mode: single
+
+  # ===========================================================================
+  # ZONE: Front Garden — Evaluate and Water
+  # Triggers every 2 hours at :15. Watering window: 05:00–09:00.
+  # ===========================================================================
+
+  - id: irrigation_front_garden_evaluate
+    alias: "Irrigation — Front Garden: Evaluate and Water"
+    description: >
+      Checks urgency score for the front garden and runs the watering script
+      with 3 cycles (urgency >= 2) or 2 cycles (urgency = 1).
+      When input_boolean.irrigation_debug is on, logs the result of every gate
+      condition and the watering decision to the HA log.
+    triggers:
+      - trigger: time_pattern
+        hours: "/2"
+        minutes: "15"
+    actions:
+      - variables:
+          zone: "Front Garden"
+          in_season: >
+            {{ now().date() >= as_datetime(states('input_datetime.irrigation_season_start')).date()
+               and now().date() <= as_datetime(states('input_datetime.irrigation_season_end')).date() }}
+          in_window: >
+            {{ now().hour >= 5 and now().hour < 9 }}
+          not_paused: >
+            {{ states('input_number.irrigation_pause_days') | int(0) == 0
+               or now() >= states('input_datetime.irrigation_pause_until') | as_datetime | as_local }}
+          no_rain_delay: >
+            {{ is_state('input_boolean.rain_delay_active', 'off') }}
+          lock_free: >
+            {{ is_state('input_boolean.irrigation_running', 'off') }}
+          hours_since_watered: >
+            {% set last = states('input_datetime.front_garden_last_watered') %}
+            {% if last in ['unknown','unavailable',''] %}999
+            {% else %}{{ ((now() - last | as_datetime | as_local).total_seconds() / 3600) | round(1) }}{% endif %}
+          not_watered_recently: >
+            {{ hours_since_watered | float(999) > 24 }}
+          force_watering_enabled: >
+            {{ is_state('input_boolean.irrigation_force_watering_enabled', 'on') }}
+          force_watering_hours: >
+            {{ (states('input_number.irrigation_force_watering_days') | float(2)) * 24 }}
+          overdue: >
+            {{ force_watering_enabled and hours_since_watered | float(999) > force_watering_hours }}
+          quorum_ok: >
+            {{ is_state('sensor.front_garden_quorum', 'ok') }}
+          urgency: >
+            {{ states('sensor.front_garden_irrigation_urgency') | int(0) }}
+          moisture_mean: >
+            {{ states('sensor.front_garden_moisture_mean') }}
+          dryness_factor: >
+            {{ states('sensor.front_garden_dryness_factor') }}
+          rain_factor: >
+            {{ states('sensor.irrigation_rain_factor') }}
+          nws_prob: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'nws_prob_24h') }}
+          nws_precip: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'nws_precip_24h') }}
+          met_prob: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'met_prob_24h') }}
+          met_precip: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'met_precip_24h') }}
+          last_watered: >
+            {{ states('input_datetime.front_garden_last_watered') }}
+          valid_sensors: >
+            {{ state_attr('sensor.front_garden_quorum', 'valid_sensors') }}
+          total_sensors: >
+            {{ state_attr('sensor.front_garden_quorum', 'total_sensors') }}
+          season_start: >
+            {{ states('input_datetime.irrigation_season_start') }}
+          season_end: >
+            {{ states('input_datetime.irrigation_season_end') }}
+          pause_days: >
+            {{ states('input_number.irrigation_pause_days') | int(0) }}
+
+      - if:
+          - condition: state
+            entity_id: input_boolean.irrigation_debug
+            state: "on"
+        then:
+          - service: logbook.log
+            data:
+              name: "Irrigation Debug"
+              message: >
+                {{ zone }} evaluated at {{ now().strftime('%H:%M') }}.
+                Season {{ season_start }}→{{ season_end }}: {{ in_season }}.
+                Window(05-09h): {{ in_window }}.
+                Paused({{ pause_days }}d): {{ not not_paused }}.
+                Rain delay: {{ not no_rain_delay }}.
+                Lock held: {{ not lock_free }}.
+                Watered recently: {{ not not_watered_recently }} (last: {{ last_watered }}).
+                Quorum {{ valid_sensors }}/{{ total_sensors }}: {{ quorum_ok }}.
+                Moisture: {{ moisture_mean }}% | Dryness: {{ dryness_factor }}.
+                NWS: {{ nws_prob }}%/{{ nws_precip }}" Met: {{ met_prob }}%/{{ met_precip }}".
+                Rain factor: {{ rain_factor }} | Urgency: {{ urgency }}.
+                GATE RESULT: {{ 'PASS-normal' if (in_season and in_window and not_paused and no_rain_delay and lock_free and not_watered_recently and quorum_ok and urgency >= 1) else 'PASS-overdue' if (in_season and in_window and not_paused and no_rain_delay and lock_free and quorum_ok and overdue and rain_factor | int(0) < 2) else 'BLOCK' }}.
+                Hours since watered: {{ hours_since_watered }}h | Force watering enabled: {{ force_watering_enabled }} (threshold {{ force_watering_hours }}h) | Overdue: {{ overdue }}.
+              entity_id: input_boolean.irrigation_debug
+
+      - condition: template
+        value_template: >
+          {{ in_season and in_window and not_paused and no_rain_delay
+             and lock_free and quorum_ok
+             and ((not_watered_recently and urgency >= 1)
+                  or (overdue and rain_factor | int(0) < 2)) }}
+
+      - if:
+          - condition: state
+            entity_id: input_boolean.irrigation_debug
+            state: "on"
+        then:
+          - service: logbook.log
+            data:
+              name: "Irrigation Debug"
+              message: >
+                {{ zone }}: gates PASSED. Urgency={{ urgency }}.
+                Decision: {{ 'FULL 3-cycle (overdue)' if (overdue and urgency < 1) else 'FULL 3-cycle' if urgency >= 2 else 'REDUCED 2-cycle' }}.
+              entity_id: input_boolean.irrigation_debug
+
+      - choose:
+          # Overdue (force-watering interval exceeded, if enabled) and no strong rain forecast
+          - conditions:
+              - condition: template
+                value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
+                    last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
+                    full 3-cycle run.
+                  level: warning
+              - service: script.front_garden_irrigation
+                data: {}
+          # Normal path — urgency >= 2: full run
+          - conditions:
+              - condition: template
+                value_template: "{{ urgency >= 2 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} urgency {{ urgency }} —
+                    full 3-cycle run.
+                  level: warning
+              - service: script.front_garden_irrigation
+                data: {}
+          # Normal path — urgency == 1: reduced run
+          - conditions:
+              - condition: template
+                value_template: "{{ urgency == 1 }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation: {{ zone }} urgency {{ urgency }} —
+                    reduced 2-cycle run.
+                  level: info
+              - service: script.front_garden_irrigation
+                data:
+                  num_cycles: 2
+    mode: single
+
+  # ===========================================================================
+  # LAST-WATERED TIMESTAMP UPDATES
+  # ===========================================================================
+
+  - id: irrigation_update_back_garden_last_watered
+    alias: "Irrigation — Record Back Garden Last Watered"
+    triggers:
+      - trigger: state
+        entity_id: script.back_vegetable_garden_irrigation
+        from: "on"
+        to: "off"
+    actions:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.back_garden_last_watered
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    mode: single
+
+  - id: irrigation_update_side_garden_last_watered
+    alias: "Irrigation — Record Side Garden Last Watered"
+    triggers:
+      - trigger: state
+        entity_id: script.side_vegetable_garden_irrigation
+        from: "on"
+        to: "off"
+    actions:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.side_garden_last_watered
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    mode: single
+
+  - id: irrigation_update_front_garden_last_watered
+    alias: "Irrigation — Record Front Garden Last Watered"
+    triggers:
+      - trigger: state
+        entity_id: script.front_garden_irrigation
+        from: "on"
+        to: "off"
+    actions:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.front_garden_last_watered
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    mode: single
+
+  # ===========================================================================
+  # IRRIGATION PAUSE — Set expiry when pause_days changes
+  # ===========================================================================
+
+  - id: irrigation_pause_set
+    alias: "Irrigation — Set Pause Expiry"
+    triggers:
+      - trigger: state
+        entity_id: input_number.irrigation_pause_days
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >
+                  {{ states('input_number.irrigation_pause_days') | int(0) > 0 }}
+            sequence:
+              - service: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.irrigation_pause_until
+                data:
+                  datetime: >
+                    {{ (now() + timedelta(
+                        days=states('input_number.irrigation_pause_days') | int(1)
+                      )).strftime('%Y-%m-%d %H:%M:%S') }}
+              - service: system_log.write
+                data:
+                  message: >
+                    Irrigation paused for
+                    {{ states('input_number.irrigation_pause_days') | int }} day(s).
+                    Resumes after
+                    {{ states('input_datetime.irrigation_pause_until') }}.
+                  level: info
+          - conditions:
+              - condition: template
+                value_template: >
+                  {{ states('input_number.irrigation_pause_days') | int(0) == 0 }}
+            sequence:
+              - service: system_log.write
+                data:
+                  message: "Irrigation pause cleared — normal scheduling resumed."
+                  level: info
+    mode: single
+
+  # ===========================================================================
+  # IRRIGATION PAUSE — Auto-expire
+  # ===========================================================================
+
+  - id: irrigation_pause_expire
+    alias: "Irrigation — Auto-Expire Pause"
+    triggers:
+      - trigger: time_pattern
+        minutes: "/30"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_number.irrigation_pause_days') | int(0) > 0
+             and now() >= states('input_datetime.irrigation_pause_until')
+                | as_datetime | as_local }}
+    actions:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.irrigation_pause_days
+        data:
+          value: 0
+      - service: system_log.write
+        data:
+          message: "Irrigation pause expired — normal scheduling resumed."
+          level: info
+    mode: single
+
+  # ===========================================================================
+  # RAIN DELAY — Auto-set on significant rainfall forecast anywhere in next 24h
+  #
+  # Requires BOTH NWS and Met.no to independently find at least one hourly
+  # forecast block within the next 24 hours showing >80% probability AND
+  # >0.5" precipitation. This deliberately mirrors the conservative
+  # "both sources must agree" philosophy used elsewhere (sensor.irrigation_rain_factor)
+  # to avoid skipping watering based on one source's outlier prediction.
+  #
+  # Widened from an original 6-hour window: a 6h lookahead only caught rain
+  # about to start imminently, missing scenarios like "heavy rain forecast
+  # for this evening" when the automation runs in the early morning watering
+  # window. A 24h window catches the whole remainder of the day.
+  # ===========================================================================
+
+  - id: irrigation_rain_delay_set
+    alias: "Irrigation — Set Rain Delay After Significant Rain"
+    triggers:
+      - trigger: time_pattern
+        hours: "/1"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ state_attr('sensor.irrigation_nws_forecast_cache', 'imminent_heavy_rain_24h') == true
+             and state_attr('sensor.irrigation_met_no_forecast_cache', 'imminent_heavy_rain_24h') == true }}
+    actions:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.rain_delay_active
+      - service: system_log.write
+        data:
+          message: >
+            Rain delay activated — both NWS and Met.no forecast >80% / >0.5"
+            within the next 24 hours. Irrigation suppressed for 24 hours.
+          level: info
+      - delay:
+          hours: 24
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.rain_delay_active
+      - service: system_log.write
+        data:
+          message: "Rain delay cleared — normal irrigation scheduling resumed."
+          level: info
+    mode: single
+    max_exceeded: silent
+
+  # ===========================================================================
+  # QUORUM FAULT NOTIFICATIONS
+  #
+  # Reads resolved notify targets from the template sensor attribute 'targets',
+  # which returns a list of entity IDs based on input_select.irrigation_notify_device.
+  # When "None" is selected the list is empty and no notifications fire.
+  # ===========================================================================
+
+  - id: irrigation_quorum_fault_back
+    alias: "Irrigation — Back Garden Quorum Fault Alert"
+    triggers:
+      - trigger: state
+        entity_id: sensor.back_garden_quorum
+        to: "fault"
+        for:
+          minutes: 5
+    actions:
+      - repeat:
+          for_each: "{{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') }}"
+          sequence:
+            - service: notify.send_message
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                title: "⚠️ Irrigation Sensor Fault"
+                message: >
+                  Back Vegetable Garden has insufficient sensors online.
+                  Valid: {{ state_attr('sensor.back_garden_quorum', 'valid_sensors') }}
+                  of {{ state_attr('sensor.back_garden_quorum', 'total_sensors') }}
+                  (minimum 3 required).
+                  Automatic watering suspended for this zone.
+    mode: single
+
+  - id: irrigation_quorum_fault_side
+    alias: "Irrigation — Side Garden Quorum Fault Alert"
+    triggers:
+      - trigger: state
+        entity_id: sensor.side_garden_quorum
+        to: "fault"
+        for:
+          minutes: 5
+    actions:
+      - repeat:
+          for_each: "{{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') }}"
+          sequence:
+            - service: notify.send_message
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                title: "⚠️ Irrigation Sensor Fault"
+                message: >
+                  Side Vegetable Garden has insufficient sensors online.
+                  Valid: {{ state_attr('sensor.side_garden_quorum', 'valid_sensors') }}
+                  of {{ state_attr('sensor.side_garden_quorum', 'total_sensors') }}
+                  (minimum 3 required).
+                  Automatic watering suspended for this zone.
+    mode: single
+
+  - id: irrigation_quorum_fault_front
+    alias: "Irrigation — Front Garden Quorum Fault Alert"
+    triggers:
+      - trigger: state
+        entity_id: sensor.front_garden_quorum
+        to: "fault"
+        for:
+          minutes: 5
+    actions:
+      - repeat:
+          for_each: "{{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') }}"
+          sequence:
+            - service: notify.send_message
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                title: "⚠️ Irrigation Sensor Fault"
+                message: >
+                  Front Garden has insufficient sensors online.
+                  Valid: {{ state_attr('sensor.front_garden_quorum', 'valid_sensors') }}
+                  of {{ state_attr('sensor.front_garden_quorum', 'total_sensors') }}
+                  (minimum 2 required).
+                  Automatic watering suspended for this zone.
+    mode: single

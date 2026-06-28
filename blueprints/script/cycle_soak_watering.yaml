@@ -1,0 +1,458 @@
+blueprint:
+  name: "Cycle & Soak Zone Watering (Cancelable + Monitored)"
+  description: >
+    Runs a zone valve for a configurable number of cycle-and-soak watering
+    cycles. Enforces single-zone operation via a global run lock.
+
+    Features:
+      - Supports two timer types selectable per script instance:
+          bhyve   — uses bhyve.start_watering with explicit minutes, bypassing
+                    the 5-minute hardcoded default on B-hyve hose timers.
+                    The device self-terminates; valve.close_valve is a safety net.
+          standard — uses valve.open_valve to start; the script manages duration
+                    entirely and calls valve.close_valve to stop. Works with any
+                    generic Zigbee/Z-Wave/WiFi valve (e.g. Sonoff).
+      - Clean cancellation via wait_for_trigger watching input_boolean.irrigation_cancel
+      - Per-minute valve state monitoring — alerts if valve closes prematurely
+      - Availability check at startup — alerts if valve is unavailable/unknown
+      - Optional completion notification
+      - Notifications via notify.send_message targeting entity IDs resolved from
+        sensor.irrigation_notify_targets_resolved (see irrigation package)
+
+    Architecture notes:
+      - Blueprint inputs used inside Jinja2 template strings are pulled into a
+        variables: block. Using !input directly inside {{ }} is not supported.
+      - All | int filters use | int(0) to prevent crashes on 'unknown' state.
+      - Cycle counting uses input_number.irrigation_cycle_counter to avoid
+        repeat.index shadowing inside nested repeat blocks.
+
+    Required helpers (all defined in irrigation_package.yaml if using the package):
+      input_boolean.irrigation_running
+      input_boolean.irrigation_cancel
+      input_number.irrigation_cycle_counter
+
+    Notification targets are read from:
+      sensor.irrigation_notify_targets_resolved (attribute: targets)
+    This sensor is defined in irrigation_package.yaml and driven by
+    input_select.irrigation_notify_device.
+
+  domain: script
+
+  input:
+    valve_entity:
+      name: Valve / Switch Entity
+      description: >
+        The entity to control for this zone. Accepts both valve and switch
+        domains — the blueprint detects the domain at runtime and calls the
+        appropriate open/close service automatically.
+
+        valve domain (B-hyve, generic valve integrations):
+          e.g. valve.front_hose_timer_front_garden_zone
+          bhyve type:    bhyve.start_watering / valve.close_valve
+          standard type: valve.open_valve / valve.close_valve
+          Active state:  open
+
+        switch domain (Sonoff Zigbee and similar, exposed as switches):
+          e.g. switch.front_garden_valve
+          Uses switch.turn_on / switch.turn_off regardless of timer_type.
+          Active state:  on
+      selector:
+        entity:
+          filter:
+            - domain: valve
+            - domain: switch
+
+    zone_name:
+      name: Zone Name
+      description: Friendly name used in notifications and log messages.
+      default: "Watering Zone"
+      selector:
+        text:
+
+    timer_type:
+      name: Timer Type
+      description: >
+        Select the type of smart timer controlling this valve.
+
+        bhyve — Orbit B-hyve hose timer integrated via the bhyve-home-assistant
+        HACS integration. Uses the bhyve.start_watering service with an explicit
+        minutes parameter. The device self-terminates after the requested time.
+
+        standard — Any generic valve (Sonoff Zigbee, Z-Wave, etc.).
+        For valve entities: uses valve.open_valve / valve.close_valve.
+        For switch entities: uses switch.turn_on / switch.turn_off.
+        The script manages the full duration in both cases.
+      default: "bhyve"
+      selector:
+        select:
+          options:
+            - label: "B-hyve (bhyve.start_watering)"
+              value: "bhyve"
+            - label: "Standard valve (valve.open_valve / valve.close_valve)"
+              value: "standard"
+
+    cycle_duration:
+      name: Cycle Duration (minutes)
+      description: >
+        How long to run the zone per watering cycle.
+        For bhyve, passed directly to bhyve.start_watering as the minutes param.
+        For standard valves, the script holds the valve open for this duration.
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+
+    soak_duration:
+      name: Soak Duration (minutes)
+      description: >
+        How long to wait between cycles to let water soak in.
+        Not applied after the final cycle.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+
+    num_cycles:
+      name: Number of Cycles
+      description: Total number of watering cycles to run.
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 10
+
+    notify_on_completion:
+      name: Notify on Successful Completion
+      description: >
+        Send a notification when all cycles complete normally.
+        Uses the targets defined in sensor.irrigation_notify_targets_resolved.
+      default: false
+      selector:
+        boolean:
+
+# Pull all blueprint inputs into template-accessible variables.
+# !input cannot be used inside {{ }} Jinja2 expressions in blueprints.
+variables:
+  var_valve_entity: !input valve_entity
+  var_zone_name: !input zone_name
+  # Derived at load time — used throughout to select correct open/close service.
+  # For switch entities, open/close always uses switch domain regardless of timer_type.
+  var_entity_domain: >
+    {{ var_valve_entity.split('.')[0] }}
+  var_timer_type: !input timer_type
+  var_cycle_duration: !input cycle_duration
+  var_soak_duration: !input soak_duration
+  var_num_cycles: !input num_cycles
+  var_notify_on_completion: !input notify_on_completion
+
+sequence:
+
+  # ── Availability check ──────────────────────────────────────────────────────
+  - if:
+      - condition: template
+        value_template: >
+          {{ states(var_valve_entity) in ['unavailable', 'unknown'] }}
+    then:
+      - repeat:
+          for_each: >
+            {{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') or [] }}
+          sequence:
+            - service: notify.send_message
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                title: "⚠️ Irrigation Unavailable"
+                message: >
+                  {{ var_zone_name }} could not start — the valve
+                  ({{ var_valve_entity }}) is {{ states(var_valve_entity) }}.
+                  Check that the integration and device are online.
+      - service: system_log.write
+        data:
+          message: >
+            Cycle & Soak [{{ var_zone_name }}]: aborted — valve
+            {{ var_valve_entity }} is {{ states(var_valve_entity) }}.
+          level: error
+      - stop: "Valve unavailable."
+
+  # ── Guard: abort if another zone is already running ────────────────────────
+  - if:
+      - condition: state
+        entity_id: input_boolean.irrigation_running
+        state: "on"
+    then:
+      - service: system_log.write
+        data:
+          message: >
+            Cycle & Soak [{{ var_zone_name }}]: skipped — another zone is
+            already running.
+          level: warning
+      - stop: "Another irrigation zone is already running."
+
+  # ── Reset helpers ───────────────────────────────────────────────────────────
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.irrigation_cancel
+
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.irrigation_cycle_counter
+    data:
+      value: 0
+
+  # ── Acquire run lock ────────────────────────────────────────────────────────
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.irrigation_running
+
+  # ── Main cycle loop ─────────────────────────────────────────────────────────
+  - repeat:
+      count: "{{ var_num_cycles | int(1) }}"
+      sequence:
+
+        # Increment cycle counter
+        - service: input_number.set_value
+          target:
+            entity_id: input_number.irrigation_cycle_counter
+          data:
+            value: >
+              {{ (states('input_number.irrigation_cycle_counter') | int(0)) + 1 }}
+
+        # ── Open valve — method depends on timer type ─────────────────────────
+        - choose:
+            # B-hyve: use bhyve.start_watering with explicit minutes.
+            # The device self-terminates after the requested duration.
+            - conditions:
+                - condition: template
+                  value_template: "{{ var_timer_type == 'bhyve' }}"
+              sequence:
+                - service: bhyve.start_watering
+                  target:
+                    entity_id: "{{ var_valve_entity }}"
+                  data:
+                    minutes: "{{ var_cycle_duration | int(20) }}"
+
+            # Standard valve or switch: script is fully responsible for duration.
+            # Use switch.turn_on for switch entities, valve.open_valve for valves.
+            - conditions:
+                - condition: template
+                  value_template: "{{ var_timer_type == 'standard' }}"
+              sequence:
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ var_entity_domain == 'switch' }}"
+                      sequence:
+                        - service: switch.turn_on
+                          target:
+                            entity_id: "{{ var_valve_entity }}"
+                  default:
+                    - service: valve.open_valve
+                      target:
+                        entity_id: "{{ var_valve_entity }}"
+
+        - service: system_log.write
+          data:
+            message: >
+              Cycle & Soak [{{ var_zone_name }}]: cycle
+              {{ states('input_number.irrigation_cycle_counter') | int(0) }}
+              of {{ var_num_cycles | int(1) }} started
+              ({{ var_cycle_duration | int(20) }} min,
+              timer type: {{ var_timer_type }}).
+            level: info
+
+        # ── Per-minute monitoring loop ────────────────────────────────────────
+        # Ticks once per minute for cycle_duration minutes.
+        # Watches for cancel trigger and premature valve closure.
+        # repeat.index here safely refers only to this inner loop.
+        - repeat:
+            count: "{{ var_cycle_duration | int(20) }}"
+            sequence:
+
+              - wait_for_trigger:
+                  - platform: state
+                    entity_id: input_boolean.irrigation_cancel
+                    to: "on"
+                timeout:
+                  seconds: 60
+                continue_on_timeout: true
+
+              # Cancel triggered?
+              - if:
+                  - condition: template
+                    value_template: "{{ wait.trigger is not none }}"
+                then:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ var_entity_domain == 'switch' }}"
+                        sequence:
+                          - service: switch.turn_off
+                            target:
+                              entity_id: "{{ var_valve_entity }}"
+                    default:
+                      - service: valve.close_valve
+                        target:
+                          entity_id: "{{ var_valve_entity }}"
+                  - service: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.irrigation_running
+                  - service: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.irrigation_cancel
+                  - service: system_log.write
+                    data:
+                      message: >
+                        Cycle & Soak [{{ var_zone_name }}]: canceled at minute
+                        {{ repeat.index }} of cycle
+                        {{ states('input_number.irrigation_cycle_counter') | int(0) }}.
+                        Valve closed, lock released.
+                      level: warning
+                  - stop: "Irrigation canceled by user."
+
+              # Premature closure? Skip check on final tick.
+              # For standard valves the valve is still open during the loop,
+              # so a closed state mid-loop is always unexpected.
+              # For bhyve, same logic applies — device shouldn't stop early.
+              - if:
+                  - condition: template
+                    value_template: >
+                      {% set closed_states = ['closed', 'off', 'unavailable', 'unknown'] %}
+                      {{ states(var_valve_entity) in closed_states
+                         and repeat.index < (var_cycle_duration | int(20)) }}
+                then:
+                  - repeat:
+                      for_each: >
+                        {{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') or [] }}
+                      sequence:
+                        - service: notify.send_message
+                          target:
+                            entity_id: "{{ repeat.item }}"
+                          data:
+                            title: "⚠️ Irrigation Stopped Early"
+                            message: >
+                              {{ var_zone_name }} valve closed unexpectedly at
+                              minute {{ repeat.index }} of
+                              {{ var_cycle_duration | int(20) }}
+                              (cycle
+                              {{ states('input_number.irrigation_cycle_counter') | int(0) }}
+                              of {{ var_num_cycles | int(1) }}).
+                              Valve state: {{ states(var_valve_entity) }}.
+                  - service: system_log.write
+                    data:
+                      message: >
+                        Cycle & Soak [{{ var_zone_name }}]: valve closed
+                        prematurely at minute {{ repeat.index }} of cycle
+                        {{ states('input_number.irrigation_cycle_counter') | int(0) }}.
+                        Alert sent.
+                      level: error
+                  - service: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.irrigation_running
+                  - stop: "Valve closed prematurely — alert sent."
+
+        # ── End of cycle ──────────────────────────────────────────────────────
+        # For bhyve: device has already self-terminated; this is a safety net.
+        # For standard valve: primary close after cycle_duration minutes.
+        # For switch: turn_off instead of valve.close_valve.
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ var_entity_domain == 'switch' }}"
+              sequence:
+                - service: switch.turn_off
+                  target:
+                    entity_id: "{{ var_valve_entity }}"
+          default:
+            - service: valve.close_valve
+              target:
+                entity_id: "{{ var_valve_entity }}"
+
+        - service: system_log.write
+          data:
+            message: >
+              Cycle & Soak [{{ var_zone_name }}]: cycle
+              {{ states('input_number.irrigation_cycle_counter') | int(0) }}
+              of {{ var_num_cycles | int(1) }} complete.
+            level: info
+
+        # ── Soak period ───────────────────────────────────────────────────────
+        # Uses input_number counter — NOT repeat.index — to determine whether
+        # this is the last cycle, avoiding index shadowing from the inner loop.
+        - if:
+            - condition: template
+              value_template: >
+                {{ states('input_number.irrigation_cycle_counter') | int(0)
+                   < (var_num_cycles | int(1)) }}
+          then:
+            - service: system_log.write
+              data:
+                message: >
+                  Cycle & Soak [{{ var_zone_name }}]: soaking for
+                  {{ var_soak_duration | int(10) }} min before cycle
+                  {{ (states('input_number.irrigation_cycle_counter') | int(0)) + 1 }}.
+                level: info
+
+            - wait_for_trigger:
+                - platform: state
+                  entity_id: input_boolean.irrigation_cancel
+                  to: "on"
+              timeout:
+                minutes: "{{ var_soak_duration | int(10) }}"
+              continue_on_timeout: true
+
+            - if:
+                - condition: template
+                  value_template: "{{ wait.trigger is not none }}"
+              then:
+                - service: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.irrigation_running
+                - service: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.irrigation_cancel
+                - service: system_log.write
+                  data:
+                    message: >
+                      Cycle & Soak [{{ var_zone_name }}]: canceled during soak
+                      after cycle
+                      {{ states('input_number.irrigation_cycle_counter') | int(0) }}.
+                      Lock released.
+                    level: warning
+                - stop: "Irrigation canceled during soak."
+
+  # ── All cycles complete ─────────────────────────────────────────────────────
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.irrigation_running
+
+  - service: system_log.write
+    data:
+      message: >
+        Cycle & Soak [{{ var_zone_name }}]: all {{ var_num_cycles | int(1) }}
+        cycles complete successfully.
+      level: info
+
+  - if:
+      - condition: template
+        value_template: "{{ var_notify_on_completion }}"
+    then:
+      - repeat:
+          for_each: >
+            {{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') or [] }}
+          sequence:
+            - service: notify.send_message
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                title: "✅ Irrigation Complete"
+                message: >
+                  {{ var_zone_name }} finished — {{ var_num_cycles | int(1) }}
+                  cycles × {{ var_cycle_duration | int(20) }} min completed
+                  successfully.
+
+mode: single
+max_exceeded: silent
