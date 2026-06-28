@@ -16,3 +16,5 @@ esphome/archive
 image
 **/secrets.yaml
 tts
+zigbee2mqtt/coordinator_backup.json
+zigbee2mqtt/state.json

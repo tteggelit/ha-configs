@@ -1,0 +1,211 @@
+advanced:
+  channel: 15
+  pan_id: 8999
+  ext_pan_id:
+    - 110
+    - 169
+    - 4
+    - 94
+    - 183
+    - 118
+    - 41
+    - 157
+  network_key:
+    - 47
+    - 190
+    - 236
+    - 70
+    - 141
+    - 97
+    - 184
+    - 234
+    - 4
+    - 140
+    - 19
+    - 201
+    - 54
+    - 211
+    - 149
+    - 153
+  network_key_distribute: false
+  log_level: warning
+homeassistant:
+  enabled: true
+version: 5
+mqtt:
+  server: mqtt://core-mosquitto
+  user: '!secrets.yaml mqtt_user'
+  password: '!secrets.yaml mqtt_password'
+serial:
+  port: >-
+    /dev/serial/by-id/usb-SONOFF_SONOFF_Dongle_Plus_MG24_8a67434f64a3ef11a7ef4ebd61ce3355-if00-port0
+  adapter: ember
+frontend:
+  enabled: true
+  port: 8099
+devices:
+  '0x8c8b48fffe4ba80b':
+    friendly_name: Pool Table Light Switch
+  '0xb0ce1814001af84a':
+    friendly_name: Guest Bedroom Light Left
+  '0xb0ce1814001b01c5':
+    friendly_name: Guest Bedroom Light Right
+  '0x0c2a6ffffeaa3aae':
+    friendly_name: Guest Bedroom Light Switch
+  '0xd44867fffe89a6da':
+    friendly_name: Guest Bedroom Fan Switch
+  '0x00124b00226ac244':
+    friendly_name: Loft Window Lights Outlet
+  '0x00124b002269d496':
+    friendly_name: Daylan's Bedroom Window Lights Outlet
+  '0x282c02bfffea3cb2':
+    friendly_name: Living Room Air Purifier Outlet
+  '0x282c02bfffea40ec':
+    friendly_name: Living Room Side Lights Outlet
+  '0x00124b00226d7023':
+    friendly_name: Aidan's Bedroom Window Lights Outlet
+  '0x7cb03eaa00a6e71c':
+    friendly_name: Studio Shelf Lights
+  '0x24fd5b0001092f10':
+    friendly_name: Kitchen North Outlet
+  '0x00124b0022ed3dad':
+    friendly_name: Studio Window Lights Outlet
+  '0x286d970001023221':
+    friendly_name: Pantry Motion Sensor
+  '0x24fd5b00010b8aa9':
+    friendly_name: Guest Bedroom Door Motion Sensor
+  '0xb0ce1814000e0705':
+    friendly_name: Garage Light 2
+  '0xb0ce1814000e1e31':
+    friendly_name: Garage Light 1
+  '0x7cb03eaa00a4c414':
+    friendly_name: Kitchen Cabinet Lights Right
+  '0x7cb03eaa00a4cbd2':
+    friendly_name: Kitchen Cabinet Lights Left
+  '0x04e3e5fffeecae30':
+    friendly_name: Pool Table Area Light Switch
+  '0x8c8b48fffe4c6076':
+    friendly_name: Basement Stairs Light Switch
+  '0x8c8b48fffe23fba7':
+    friendly_name: Gym Light Switch
+  '0xc09b9efffed1323c':
+    friendly_name: Basement Bathroom Fan Switch
+  '0x8c8b48fffe4bef9e':
+    friendly_name: Mechanical Room Light Switch
+  '0x282c02bfffea3741':
+    friendly_name: Grow Tent Outlet
+  '0x142d41fffead52b1':
+    friendly_name: Backyard Outlets
+  '0x286d9700011515eb':
+    friendly_name: Aidan's Bedroom Door Motion Sensor
+  '0x286d97000114ddcc':
+    friendly_name: Master Bathroom Motion Sensor
+  '0x286d9700010a620c':
+    friendly_name: Daylan's Bedroom Door Motion Sensor
+  '0x286d97000101eff3':
+    friendly_name: Upstairs Bathroom Left Sink Leak Sensor
+  '0x286d97000109864c':
+    friendly_name: Upstairs Bathroom Right Sink Leak Sensor
+  '0x286d970001098647':
+    friendly_name: Master Bathroom Left Sink Leak Sensor
+  '0x286d970001098649':
+    friendly_name: Master Bathroom Right Sink Leak Sensor
+  '0x286d97000114daed':
+    friendly_name: Downstairs Bathroom Motion Sensor
+  '0x286d97000109864d':
+    friendly_name: Downstairs Bathroom Sink Leak Sensor
+  '0x286d97000115d361':
+    friendly_name: Basement Stairs Motion Sensor
+  '0xb43a31fffe3b920e':
+    friendly_name: Basement Bathroom Light Switch
+  '0x286d97000115d4a5':
+    friendly_name: Water Softener Leak Sensor
+  '0x286d970001150349':
+    friendly_name: Basement Bathroom Motion Sensor
+  '0x286d97000115d80d':
+    friendly_name: Basement Bathroom Sink Leak Sensor
+  '0x286d97000114db0d':
+    friendly_name: Mechanical Room Motion Sensor
+  '0x286d9700011493cb':
+    friendly_name: Sump Pump Leak Sensor
+  '0x286d97000109861c':
+    friendly_name: Water Heater Leak Sensor
+  '0x286d97000115d783':
+    friendly_name: Mechanical Room Drain Leak Sensor
+  '0x286d97000115d54a':
+    friendly_name: Slop Sink Leak Sensor
+  '0x282c02bfffea48b9':
+    friendly_name: Proxmox Server Outlet
+  '0x286d9700010b8a33':
+    friendly_name: Basement Freezer Door Motion Sensor
+  '0x286d97000101b49c':
+    friendly_name: Third Car Garage Motion Sensor
+  '0x24fd5b00010cab32':
+    friendly_name: Kitchen Sink Leak Sensor
+  '0x8c8b48fffe4c5b2e':
+    friendly_name: Basement Entertainment Area Light Switch
+  '0x002446fffd09b16e':
+    friendly_name: Front Door Lock
+  '0x001788010f18cb8f':
+    friendly_name: Basement Entertainment Light 1
+  '0x001788010ec00fb1':
+    friendly_name: Basement Entertainment Light 2
+  '0x001788010f18e8ea':
+    friendly_name: Basement Entertainment Light 3
+  '0x001788010ec0211a':
+    friendly_name: Basement Entertainment Light 4
+  '0xb0ce181400051cda':
+    friendly_name: Aidan's Nightstand Light
+  '0xffffb40e0605b8bd':
+    friendly_name: Back Vegetable Garden Moisture Sensor 1
+  '0xffffb40e06058bfc':
+    friendly_name: Back Vegetable Garden Moisture Sensor 3
+  '0xffffb40e0605ad78':
+    friendly_name: Back Vegetable Garden Moisture Sensor 2
+  '0xffffb40e0606acc9':
+    friendly_name: Back Vegetable Garden Moisture Sensor 4
+  '0xffffb40e0606b0d7':
+    friendly_name: Back Vegetable Garden Moisture Sensor 5
+  '0xffffb40e0605e618':
+    friendly_name: Side Vegetable Garden Moisture Sensor 1
+  '0xffffb40e0606aa42':
+    friendly_name: Side Vegetable Garden Moisture Sensor 2
+  '0xffffb40e0606b1b4':
+    friendly_name: Side Vegetable Garden Moisture Sensor 3
+  '0xffffb40e0606aed6':
+    friendly_name: Side Vegetable Garden Moisture Sensor 4
+  '0x7c3e823566100000':
+    friendly_name: Front Garden Moisture Sensor 2
+  '0x7c3e82d72ca20000':
+    friendly_name: Front Garden Moisture Sensor 1
+  '0x7c3e82d6f3e80000':
+    friendly_name: Floating Garden Moisture Sensor 1
+  '0xf84477fffe0b6ba0':
+    friendly_name: Front Garden Faucet Valve
+  '0x44e2f8fffe4da509':
+    friendly_name: Aidan's Fan Lights Remote
+  '0x44e2f8fffe3e670b':
+    friendly_name: Aidan's Nightstand Light Remote
+  '0x7cb94c631d790000':
+    friendly_name: Aidan's Fan Light 2
+  '0x7cb94c78cdd30000':
+    friendly_name: Aidan's Fan Light 6
+  '0x7cb94c631ecb0000':
+    friendly_name: Aidan's Fan Light 4
+  '0xc4d7fdbc1c3c0000':
+    friendly_name: Aidan's Fan Light 1
+  '0xa81710b8292b0000':
+    friendly_name: Aidan's Fan Light 3
+  '0x7cb94c63427b0000':
+    friendly_name: Aidan's Fan Light 5
+groups:
+  '1':
+    friendly_name: Guest Bedroom Lights
+  '2':
+    friendly_name: Basement Entertainment TV Lights
+  '3':
+    friendly_name: Basement Entertainment Couch Lights
+  '4':
+    friendly_name: Basement Entertainment Lights
+  '5':
+    friendly_name: Aidan's Fan Lights
