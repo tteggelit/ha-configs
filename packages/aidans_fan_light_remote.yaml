@@ -121,56 +121,37 @@ script:
 
 # Automations
 automation:
-  - alias: IKEA Styrbar - Aidan's Fan Light Control
+  - alias: Aidan's Fan Light Control
     description: Control RGB light with Styrbar remote
     mode: restart
     trigger:
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_id: 4e2a160e99cbbef2818d673685056bf0
-          command: "on"
+      - platform: mqtt
+        topic: "zigbee2mqtt/Aidan's Fan Lights Remote/action"
+        payload: "on"
         id: button_on
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_id: 4e2a160e99cbbef2818d673685056bf0
-          command: "off"
+      - platform: mqtt
+        topic: "zigbee2mqtt/Aidan's Fan Lights Remote/action"
+        payload: "off"
         id: button_off
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_id: 4e2a160e99cbbef2818d673685056bf0
-          command: move_with_on_off
-          args: [0, 83]
+      - platform: mqtt
+        topic: "zigbee2mqtt/Aidan's Fan Lights Remote/action"
+        payload: "brightness_move_up"
         id: brightness_up
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_id: 4e2a160e99cbbef2818d673685056bf0
-          command: move
-          args: [1, 83, 0, 0]
+      - platform: mqtt
+        topic: "zigbee2mqtt/Aidan's Fan Lights Remote/action"
+        payload: "brightness_move_down"
         id: brightness_down
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_id: 4e2a160e99cbbef2818d673685056bf0
-          command: stop
-          args: [0, 0]
+      - platform: mqtt
+        topic: "zigbee2mqtt/Aidan's Fan Lights Remote/action"
+        payload: "brightness_stop"
         id: brightness_stop
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_id: 4e2a160e99cbbef2818d673685056bf0
-          command: press
-          args: [257, 13, 0]
+      - platform: mqtt
+        topic: "zigbee2mqtt/Aidan's Fan Lights Remote/action"
+        payload: "arrow_left_click"
         id: color_left
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_id: 4e2a160e99cbbef2818d673685056bf0
-          command: press
-          args: [256, 13, 0]
+      - platform: mqtt
+        topic: "zigbee2mqtt/Aidan's Fan Lights Remote/action"
+        payload: "arrow_right_click"
         id: color_right
     action:
       - choose:

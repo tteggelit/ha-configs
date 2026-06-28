@@ -68,70 +68,36 @@ todo_test:
         action: todoist.new_task
   mode: single
   icon: mdi:checkbox-marked-circle-auto-outline
-manually_water_vegetable_garden:
-  alias: Manually Water Vegetable Garden
-  sequence:
-  - repeat:
-      count: 2
-      sequence:
-      - service: bhyve.start_watering
-        metadata: {}
-        data:
-          entity_id: switch.vegetable_garden_zone
-          minutes: 22
-      - delay:
-          hours: 0
-          minutes: 15
-          seconds: 0
-          milliseconds: 0
+back_vegetable_garden_irrigation:
+  alias: Back Vegetable Garden Irrigation
+  use_blueprint:
+    path: cycle_soak_watering.yaml
+    input:
+      valve_entity: valve.back_vegetable_garden_timer_zone
+      zone_name: Back Vegetable Garden
+      notify_entities:
+      - notify.tis_iphone
+      notify_on_completion: true
+      num_cycles: 4
   description: ''
-  icon: mdi:water-pump
-dim_basement_entertainment_lights_for_watching_tv:
-  sequence:
-  - sequence:
-    - action: light.turn_on
-      target:
-        entity_id: light.basement_entertainment_area_lights
-      data:
-        transition: 4
-        brightness_pct: 100
-    - parallel:
-      - action: light.turn_on
-        data:
-          brightness_pct: 25
-          transition: 4
-        target:
-          entity_id:
-          - light.basement_entertainment_light_1
-          - light.basement_entertainment_light_3
-      - action: light.turn_on
-        target:
-          entity_id:
-          - light.basement_entertainment_light_2
-          - light.basement_entertainment_light_4
-        data:
-          brightness_pct: 5
-          transition: 4
-  alias: Dim Basement Entertainment lights for watching TV
+side_vegetable_garden_irrigation:
+  alias: Side Vegetable Garden Irrigation
+  use_blueprint:
+    path: cycle_soak_watering.yaml
+    input:
+      valve_entity: valve.vegetable_garden_timer_vegetable_garden_zone
+      zone_name: Side Vegetable Garden
+      notify_entities:
+      - notify.tis_iphone
+      notify_on_completion: true
   description: ''
-reset_basement_entertainment_lights:
-  sequence:
-  - parallel:
-    - action: light.turn_on
-      target:
-        entity_id: light.basement_entertainment_area_lights
-      data:
-        transition: 4
-        brightness_pct: 66
-    - action: light.turn_on
-      target:
-        entity_id:
-        - light.basement_entertainment_light_1
-        - light.basement_entertainment_light_2
-        - light.basement_entertainment_light_3
-        - light.basement_entertainment_light_4
-      data:
-        brightness_pct: 100
-        transition: 4
-  alias: Reset Basement Entertainment lights
+front_garden_irrigation:
+  alias: Front Garden Irrigation
+  use_blueprint:
+    path: cycle_soak_watering.yaml
+    input:
+      valve_entity: switch.front_garden_faucet_valve
+      zone_name: Front Garden Irrigation
+      timer_type: standard
+      notify_on_completion: true
   description: ''

@@ -1,8 +1,8 @@
 switch:
   - platform: flux
     lights:
-      - light.right_guest_bedroom_light_light_2
-      - light.left_guest_bedroom_light_light
+      - light.guest_bedroom_light_right
+      - light.guest_bedroom_light_left
     name: Guest Bedroom Flux
     start_time: "8:00"
     stop_time: "23:00"

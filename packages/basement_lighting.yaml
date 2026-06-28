@@ -5,6 +5,114 @@ input_number:
     max: 100
     initial: 100
 
+script:
+  dim_basement_entertainment_lights_for_watching_tv:
+    sequence:
+      # Step 1: Sequential commands with delays (prevents race conditions)
+      - action: light.turn_on
+        data:
+          brightness_pct: 15
+          transition: 4
+        target:
+          entity_id:
+            - light.basement_entertainment_light_3
+      
+      - action: light.turn_on
+        data:
+          brightness_pct: 40
+          transition: 4
+        target:
+          entity_id:
+            - light.basement_entertainment_light_4
+      
+      #- delay: 0.5  # Give Zigbee mesh time to process
+      
+      - action: light.turn_on
+        data:
+          brightness_pct: 35
+          transition: 4
+        target:
+          entity_id:
+            - light.basement_entertainment_light_1
+            - light.basement_entertainment_light_2
+      
+      # Step 2: Wait for transitions to complete
+      - delay: 5
+      
+      # Step 3: Verify and retry only failed lights
+      - choose:
+          - conditions:
+              - condition: or
+                conditions:
+                  - condition: numeric_state
+                    entity_id: light.basement_entertainment_light_1
+                    attribute: brightness
+                    above: 30
+                  - condition: numeric_state
+                    entity_id: light.basement_entertainment_light_3
+                    attribute: brightness
+                    above: 30
+                  - condition: numeric_state
+                    entity_id: light.basement_entertainment_light_2
+                    attribute: brightness
+                    above: 10
+                  - condition: numeric_state
+                    entity_id: light.basement_entertainment_light_4
+                    attribute: brightness
+                    above: 10
+            sequence:
+              # Retry lights that didn't reach target (shorter transition for retry)
+              - action: light.turn_on
+                data:
+                  brightness_pct: 25
+                  transition: 2
+                target:
+                  entity_id: >
+                    {% set failed = [] %}
+                    {% for light in ['light.basement_entertainment_light_3', 'light.basement_entertainment_light_4'] %}
+                      {% if state_attr(light, 'brightness') | int > 30 %}
+                        {% set failed = failed + [light] %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ failed if failed else [] }}
+              - action: light.turn_on
+                data:
+                  brightness_pct: 5
+                  transition: 2
+                target:
+                  entity_id: >
+                    {% set failed = [] %}
+                    {% for light in ['light.basement_entertainment_light_1', 'light.basement_entertainment_light_2'] %}
+                      {% if state_attr(light, 'brightness') | int > 10 %}
+                        {% set failed = failed + [light] %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ failed if failed else [] }}
+    alias: Dim Basement Entertainment lights for watching TV
+    description: ''
+
+  reset_basement_entertainment_lights:
+    sequence:
+    - parallel:
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_entertainment_area_light_switch
+        data:
+          transition: 4
+          brightness_pct: 66
+      - action: light.turn_on
+        target:
+          entity_id:
+          - light.basement_entertainment_light_1
+          - light.basement_entertainment_light_2
+          - light.basement_entertainment_light_3
+          - light.basement_entertainment_light_4
+        data:
+          brightness_pct: 100
+          transition: 4
+    alias: Reset Basement Entertainment lights
+    description: ''
+
 switch:
   - platform: flux
     lights:
@@ -31,7 +139,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.basement_stairs_motion_sensor
+          - binary_sensor.basement_stairs_motion_sensor_occupancy
         to:
           - 'on'
     conditions:
@@ -44,7 +152,7 @@ automation:
     actions:
       - action: light.turn_on
         target:
-          entity_id: light.basement_stairs_lights
+          entity_id: light.basement_stairs_light_switch
         data:
           brightness_pct: 100
           transition: 1
@@ -55,7 +163,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.basement_stairs_motion_sensor
+          - binary_sensor.basement_stairs_motion_sensor_occupancy
         to:
           - 'off'
         for:
@@ -64,13 +172,13 @@ automation:
           seconds: 15
     conditions:
       - condition: state
-        entity_id: light.basement_stairs_lights
+        entity_id: light.basement_stairs_light_switch
         state:
           - 'on'
     actions:
       - action: light.turn_on
         target:
-          entity_id: light.basement_stairs_lights
+          entity_id: light.basement_stairs_light_switch
         data:
           brightness_pct: 10
           transition: 2
@@ -81,7 +189,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.basement_stairs_motion_sensor
+          - binary_sensor.basement_stairs_motion_sensor_occupancy
         to:
           - 'off'
         for:
@@ -96,7 +204,7 @@ automation:
     actions:
       - action: light.turn_off
         target:
-          entity_id: light.basement_stairs_lights
+          entity_id: light.basement_stairs_light_switch
         data:
           transition: 3
     mode: single
@@ -106,7 +214,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.mechanical_room_motion_sensor
+          - binary_sensor.mechanical_room_motion_sensor_occupancy
         to:
           - 'off'
         for:
@@ -116,7 +224,7 @@ automation:
     actions:
       - action: light.turn_on
         target:
-          entity_id: light.mechanical_room_lights
+          entity_id: light.mechanical_room_light_switch
         data:
           transition: 5
           brightness_pct: 15
@@ -127,13 +235,13 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.mechanical_room_motion_sensor
+          - binary_sensor.mechanical_room_motion_sensor_occupancy
         to:
           - 'on'
     actions:
       - action: light.turn_on
         target:
-          entity_id: light.mechanical_room_lights
+          entity_id: light.mechanical_room_light_switch
         data:
           brightness_pct: 100
           transition: 2
@@ -144,7 +252,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.mechanical_room_motion_sensor
+          - binary_sensor.mechanical_room_motion_sensor_occupancy
         to:
           - 'off'
         for:
@@ -154,7 +262,7 @@ automation:
     actions:
       - action: light.turn_off
         target:
-          entity_id: light.mechanical_room_lights
+          entity_id: light.mechanical_room_light_switch
         data:
           transition: 2
     mode: single
@@ -164,7 +272,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.basement_entertainment_area_lights
+          - light.basement_entertainment_area_light_switch
         to:
           - 'off'
         for:
@@ -191,7 +299,7 @@ automation:
           - 'on'
     conditions:
       - condition: state
-        entity_id: light.basement_entertainment_area_lights
+        entity_id: light.basement_entertainment_area_light_switch
         state:
           - 'on'
     actions:
@@ -205,7 +313,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.basement_entertainment_area_lights
+          - light.basement_entertainment_area_light_switch
         to:
           - 'on'
     conditions:
@@ -229,7 +337,7 @@ automation:
           - 'off'
     conditions:
       - condition: state
-        entity_id: light.basement_entertainment_area_lights
+        entity_id: light.basement_entertainment_area_light_switch
         state:
           - 'on'
     actions:
@@ -243,7 +351,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.basement_entertainment_area_lights
+          - light.basement_entertainment_area_light_switch
         to:
           - 'on'
     conditions:
@@ -262,12 +370,12 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.pool_table_light
+          - light.pool_table_light_switch
         to:
           - 'on'
     conditions:
       - condition: state
-        entity_id: light.basement_entertainment_area_lights
+        entity_id: light.basement_entertainment_area_light_switch
         state:
           - 'on'
     actions:
@@ -291,12 +399,12 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.pool_table_light
+          - light.pool_table_light_switch
         to:
           - 'off'
     conditions:
       - condition: state
-        entity_id: light.basement_entertainment_area_lights
+        entity_id: light.basement_entertainment_area_light_switch
         state:
           - 'on'
     actions:
@@ -310,13 +418,13 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.basement_entertainment_area_lights
+          - light.basement_entertainment_area_light_switch
         to:
           - 'on'
     actions:
       - if:
         - condition: state
-          entity_id: light.pool_table_light
+          entity_id: light.pool_table_light_switch
           state:
             - 'on'
         then:
@@ -344,12 +452,12 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.pool_table_light
+          - light.pool_table_light_switch
         to:
           - 'on'
     conditions:
       - condition: state
-        entity_id: light.pool_table_area_lights
+        entity_id: light.pool_table_area_light_switch
         state:
           - 'on'
     actions:
@@ -359,14 +467,14 @@ automation:
             entity_id: input_number.pool_table_area_lights_previous_value
           data:
             value: >-
-              {% if states('light.pool_table_area_lights') == 'off' %}
+              {% if states('light.pool_table_area_light_switch') == 'off' %}
                 0
               {% else %}
-                {{ (state_attr('light.pool_table_area_lights', 'brightness') | int / 255 * 100) | round }}
+                {{ (state_attr('light.pool_table_area_light_switch', 'brightness') | int / 255 * 100) | round }}
               {% endif %}
         - action: light.turn_on
           target:
-            entity_id: light.pool_table_area_lights
+            entity_id: light.pool_table_area_light_switch
           data:
             transition: 4
             brightness_pct: 15
@@ -377,18 +485,18 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.pool_table_light
+          - light.pool_table_light_switch
         to:
           - 'off'
     conditions:
       - condition: state
-        entity_id: light.pool_table_area_lights
+        entity_id: light.pool_table_area_light_switch
         state:
           - 'on'
     actions:
       - action: light.turn_on
         target:
-          entity_id: light.pool_table_area_lights
+          entity_id: light.pool_table_area_light_switch
         data:
           transition: 4
           brightness_pct: "{{ states('input_number.pool_table_area_lights_previous_value') }}"
@@ -399,12 +507,12 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - light.pool_table_area_lights
+          - light.pool_table_area_light_switch
         to:
           - 'on'
     conditions:
       - condition: state
-        entity_id: light.pool_table_light
+        entity_id: light.pool_table_light_switch
         state:
           - 'on'
     actions:
@@ -414,15 +522,75 @@ automation:
             entity_id: input_number.pool_table_area_lights_previous_value
           data:
             value: >-
-              {% if states('light.pool_table_area_lights') == 'off' %}
+              {% if states('light.pool_table_area_light_switch') == 'off' %}
                 0
               {% else %}
-                {{ (state_attr('light.pool_table_area_lights', 'brightness') | int / 255 * 100) | round }}
+                {{ (state_attr('light.pool_table_area_light_switch', 'brightness') | int / 255 * 100) | round }}
               {% endif %}
         - action: light.turn_on
           target:
-            entity_id: light.pool_table_area_lights
+            entity_id: light.pool_table_area_light_switch
           data:
             transition: 4
             brightness_pct: 15
+    mode: single
+  - id: 'turn_on_basement_bathroom_lights_with_motion'
+    alias: Turn on Basement Bathroom lights with motion
+    description: ''
+    triggers:
+    - trigger: state
+      entity_id:
+      - binary_sensor.basement_bathroom_motion_sensor_occupancy
+      to:
+      - 'on'
+    conditions: []
+    actions:
+    - action: light.turn_on
+      metadata: {}
+      target:
+        entity_id: light.basement_bathroom_light_switch
+      data:
+        transition: 0
+        brightness_pct: 52
+    mode: single
+  - id: 'dim_basement_bathroom_lights_when_no_motion'
+    alias: Dim Basement Bathroom lights when no motion
+    description: ''
+    triggers:
+    - trigger: state
+      entity_id:
+      - binary_sensor.basement_bathroom_motion_sensor_occupancy
+      to:
+      - 'off'
+    conditions: []
+    actions:
+    - action: light.turn_on
+      metadata: {}
+      target:
+        entity_id: light.basement_bathroom_light_switch
+      data:
+        transition: 5
+        brightness_pct: 30
+    mode: single
+  - id: 'turn_off_basement_bathroom_lights_when_no_motion'
+    alias: Turn off Basement Bathroom lights when no motion
+    description: ''
+    triggers:
+    - trigger: state
+      entity_id:
+      - binary_sensor.basement_bathroom_motion_sensor_occupancy
+      to:
+      - 'off'
+      for:
+        hours: 0
+        minutes: 0
+        seconds: 30
+    conditions: []
+    actions:
+    - action: light.turn_off
+      metadata: {}
+      target:
+        entity_id: light.basement_bathroom_light_switch
+      data:
+        transition: 3
     mode: single

@@ -1,106 +1,3 @@
-- id: '1702687858384'
-  alias: Garden Tower Pumps - Turn On
-  description: Turn the Garden Tower pumps on after being off for 45 minutes
-  trigger:
-  - platform: state
-    entity_id:
-    - switch.garden_tower_pumps_switch
-    to: 'off'
-    for:
-      hours: 0
-      minutes: 30
-      seconds: 0
-  condition: []
-  action:
-  - service: switch.turn_on
-    metadata: {}
-    data: {}
-    target:
-      entity_id: switch.garden_tower_pumps_switch
-  mode: single
-- id: '1702687906351'
-  alias: Garden Tower Pumps - Turn Off
-  description: Turn the Garden Tower pumps off after being on for 5 minutes
-  trigger:
-  - platform: state
-    entity_id:
-    - switch.garden_tower_pumps_switch
-    to: 'on'
-    for:
-      hours: 0
-      minutes: 5
-      seconds: 0
-  condition: []
-  action:
-  - service: switch.turn_off
-    metadata: {}
-    data: {}
-    target:
-      entity_id: switch.garden_tower_pumps_switch
-  mode: single
-- id: '1702687973093'
-  alias: Garden Tower Pumps - Toggle After Reboot
-  description: Toggle the Garden Tower pump switch when Home Assistant starts
-  trigger:
-  - platform: homeassistant
-    event: start
-  action:
-  - service: switch.toggle
-    metadata: {}
-    data: {}
-    target:
-      entity_id: switch.garden_tower_pumps_switch
-  mode: single
-- id: '1702688753601'
-  alias: Turn Off Grow Tent Fans
-  description: Turn the grow tent fans off at 7pm
-  trigger:
-  - platform: time
-    at: '19:00:00'
-  condition: []
-  action:
-  - service: switch.turn_off
-    metadata: {}
-    data: {}
-    target:
-      entity_id:
-      - switch.grow_tent_fans_switch
-  mode: single
-- id: '1702688838173'
-  alias: Turn On Grow Tent Fans
-  description: Turn on grow tent fans at 7am
-  trigger:
-  - platform: time
-    at: 07:00:00
-  condition: []
-  action:
-  - service: switch.turn_on
-    metadata: {}
-    data: {}
-    target:
-      entity_id:
-      - switch.grow_tent_fans_switch
-  mode: single
-- id: '1702689491954'
-  alias: Guest Bedroom Door Opened Notification
-  description: Send a phone alert when the guest bedroom door is opened.
-  trigger:
-  - platform: state
-    entity_id:
-    - binary_sensor.guest_bedroom_door_sensor_ias_zone
-    to: 'on'
-  condition: []
-  action:
-  - service: notify.mobile_app_tis_iphone
-    data:
-      message: Guest bedroom door opened
-      data:
-        push:
-          sound:
-            name: default
-            critical: 1
-            volume: 1
-  mode: single
 - id: '1703623708618'
   alias: Leak Detection & Notifier
   description: ''
@@ -108,60 +5,22 @@
     path: tteggelit/leak-detector-notifier.yaml
     input:
       notify_device: c649c07764020e9d99e38656cf640e62
-- id: '1703637809076'
-  alias: Turn On Holiday Decorations
-  description: Turn on holiday decorations sunset
-  triggers:
-  - event: sunset
-    offset: 0
-    trigger: sun
-  conditions: []
-  actions:
-  - metadata: {}
-    data: {}
-    target:
-      entity_id:
-      - switch.studio_window_light_outlet_switch
-      - switch.loft_window_lights_outlet_switch_2
-      - switch.daylan_s_window_lights_outlet_switch_3
-      - switch.aidan_s_window_lights_outlet_switch_4
-      - switch.front_decorations
-    action: switch.turn_on
-  mode: single
-- id: '1703637961990'
-  alias: Turn Off Holiday Decorations
-  description: Turn off the holiday decorations at 10:30pm
-  triggers:
-  - at: '22:30:00'
-    trigger: time
-  conditions: []
-  actions:
-  - metadata: {}
-    data: {}
-    target:
-      entity_id:
-      - switch.studio_window_light_outlet_switch
-      - switch.loft_window_lights_outlet_switch_2
-      - switch.front_decorations
-      - switch.living_room_smart_plug_2_switch
-    action: switch.turn_off
-  mode: single
 - id: '1703648655388'
   alias: Basement Freezer Open Notification
   description: Notify if the freezer is left open for more than 2 minutes
-  trigger:
-  - platform: state
-    entity_id:
-    - binary_sensor.basement_freezer_opening
-    to: 'on'
+  triggers:
+  - entity_id:
+    - binary_sensor.basement_freezer_door_motion_sensor_contact
+    to:
+    - 'on'
     for:
       hours: 0
       minutes: 2
       seconds: 0
-  condition: []
-  action:
-  - service: notify.mobile_app_tis_iphone
-    data:
+    trigger: state
+  conditions: []
+  actions:
+  - data:
       message: Basement freezer left open
       data:
         push:
@@ -169,47 +28,7 @@
             name: default
             critical: 1
             volume: 1
-  mode: single
-- id: '1703693744670'
-  alias: Daylan's Door Opened Notification
-  description: Notify when Daylan's door opens during the night
-  trigger:
-  - platform: state
-    entity_id:
-    - binary_sensor.daylan_s_door_sensor_opening_2
-    to: 'on'
-  condition:
-  - condition: time
-    after: '21:30:00'
-    before: 06:00:00
-    weekday:
-    - sun
-    - mon
-    - tue
-    - wed
-    - thu
-    - fri
-    - sat
-  action:
-  - service: notify.mobile_app_tis_iphone
-    data:
-      message: Daylan's door opened during the night
-  mode: single
-- id: '1703693873687'
-  alias: Turn Off Boys' Holiday Decorations
-  description: Turn off boys' window holiday lights at 9pm
-  triggers:
-  - at: '21:00:00'
-    trigger: time
-  conditions: []
-  actions:
-  - metadata: {}
-    data: {}
-    target:
-      entity_id:
-      - switch.daylan_s_window_lights_outlet_switch_3
-      - switch.aidan_s_window_lights_outlet_switch_4
-    action: switch.turn_off
+    action: notify.mobile_app_tis_iphone
   mode: single
 - id: '1703714762428'
   alias: Turn On Kitchen Cabinet Lights (Evening)
@@ -229,7 +48,8 @@
     metadata: {}
     data: {}
     target:
-      entity_id: switch.living_room_side_light_switch
+      entity_id:
+      - switch.living_room_side_lights_outlet
   mode: single
 - id: '1703715453766'
   alias: Turn Off Kitchen Cabinet Lights
@@ -246,45 +66,49 @@
     data: {}
     target:
       entity_id:
-      - light.kitchen_cabinet_lights_left_light_2
-      - light.kitchen_cabinet_lights_right_light_3
+      - light.kitchen_cabinet_lights_left
+      - light.kitchen_cabinet_lights_right
     action: light.turn_off
   mode: single
 - id: '1704080218841'
   alias: Turn On Pantry Light
   description: Turn on pantry light when motion detected
-  trigger:
-  - platform: state
-    entity_id:
-    - binary_sensor.pantry_motion_sensor_motion_4
-    to: 'on'
-  condition: []
-  action:
-  - service: switch.turn_on
-    metadata: {}
+  triggers:
+  - entity_id:
+    - binary_sensor.pantry_motion_sensor_occupancy
+    to:
+    - 'on'
+    trigger: state
+    from:
+    - 'off'
+  conditions: []
+  actions:
+  - metadata: {}
     data: {}
     target:
       entity_id: switch.pantry_light
+    action: switch.turn_on
   mode: single
 - id: '1704080276347'
   alias: Turn Off Pantry Light
   description: Turn off pantry light when motion is no longer detected
-  trigger:
-  - platform: state
-    entity_id:
-    - binary_sensor.pantry_motion_sensor_motion_4
-    to: 'off'
+  triggers:
+  - entity_id:
+    - binary_sensor.pantry_motion_sensor_occupancy
+    to:
+    - 'off'
     for:
       hours: 0
       minutes: 0
       seconds: 30
-  condition: []
-  action:
-  - service: switch.turn_off
-    metadata: {}
+    trigger: state
+  conditions: []
+  actions:
+  - metadata: {}
     data: {}
     target:
       entity_id: switch.pantry_light
+    action: switch.turn_off
   mode: single
 - id: '1704080363630'
   alias: Turn On Master Closet Light
@@ -437,6 +261,12 @@
     trigger: state
   conditions: []
   actions:
+  - action: number.set_value
+    metadata: {}
+    target:
+      entity_id: number.thermostat_ventilator_minimum_time_home
+    data:
+      value: '0'
   - metadata: {}
     data:
       preset_mode: away
@@ -478,13 +308,14 @@
         locking fails
       if:
       - condition: state
-        entity_id: lock.front_door_lock_door_lock
-        state: unlocked
+        entity_id: lock.front_door_lock
+        state:
+        - unlocked
       then:
       - metadata: {}
         data: {}
         target:
-          entity_id: lock.front_door_lock_door_lock
+          entity_id: lock.front_door_lock
         action: lock.lock
       - delay:
           hours: 0
@@ -495,8 +326,9 @@
       - alias: If Front Door still unlocked, notify
         if:
         - condition: state
-          entity_id: lock.front_door_lock_door_lock
-          state: unlocked
+          entity_id: lock.front_door_lock
+          state:
+          - unlocked
         then:
         - metadata: {}
           data:
@@ -563,8 +395,9 @@
       fails, notify
     if:
     - condition: state
-      entity_id: binary_sensor.third_car_garage_door_opening
-      state: 'on'
+      entity_id: binary_sensor.third_car_garage_motion_sensor_contact
+      state:
+      - 'on'
     then:
     - metadata: {}
       data:
@@ -591,25 +424,23 @@
     target:
       entity_id:
       - switch.christmas_tree_switch_3
-      - switch.living_room_air_purifier_switch
-      - switch.living_room_side_light_switch
+      - switch.living_room_air_purifier_outlet
+      - switch.living_room_side_lights_outlet
   - action: light.turn_off
     metadata: {}
     data: {}
     target:
       entity_id:
-      - light.basement_bathroom_lights
-      - light.basement_entertainment_area_lights
-      - light.basement_stairs_lights
-      - light.gym_area_lights
       - light.kitchen_cabinet_lights
       - light.living_room_lights
-      - light.mechanical_room_lights
-      - light.pool_table_area_lights
-      - light.pool_table_light
-      - light.guest_bedroom_lights
-      - light.left_guest_bedroom_light_light
-      - light.right_guest_bedroom_light_light_2
+      - light.basement_bathroom_light_switch
+      - light.basement_entertainment_area_light_switch
+      - light.basement_stairs_light_switch
+      - light.gym_light_switch
+      - light.mechanical_room_light_switch
+      - light.pool_table_light_switch
+      - light.pool_table_area_light_switch
+      - light.guest_bedroom_light_switch
   mode: single
 - id: '1711216712567'
   alias: Alarm Disarmed Actions
@@ -638,7 +469,8 @@
       metadata: {}
       data: {}
       target:
-        entity_id: switch.living_room_side_light_switch
+        entity_id:
+        - switch.living_room_side_lights_outlet
   - metadata: {}
     data:
       preset_mode: home
@@ -656,7 +488,7 @@
     target:
       entity_id:
       - switch.christmas_tree_switch_3
-      - switch.living_room_air_purifier_switch
+      - switch.living_room_air_purifier_outlet
   mode: single
 - id: '1711921755033'
   alias: Alarm Home Actions
@@ -668,6 +500,12 @@
     trigger: state
   conditions: []
   actions:
+  - action: number.set_value
+    metadata: {}
+    target:
+      entity_id: number.thermostat_ventilator_minimum_time_home
+    data:
+      value: '0'
   - data:
       entity_id: climate.thermostat
     action: ecobee.resume_program
@@ -707,13 +545,14 @@
         locking fails
       if:
       - condition: state
-        entity_id: lock.front_door_lock_door_lock
-        state: unlocked
+        entity_id: lock.front_door_lock
+        state:
+        - unlocked
       then:
       - metadata: {}
         data: {}
         target:
-          entity_id: lock.front_door_lock_door_lock
+          entity_id: lock.front_door_lock
         action: lock.lock
       - delay:
           hours: 0
@@ -724,8 +563,9 @@
       - alias: If Front Door still unlocked, notify
         if:
         - condition: state
-          entity_id: lock.front_door_lock_door_lock
-          state: unlocked
+          entity_id: lock.front_door_lock
+          state:
+          - unlocked
         then:
         - metadata: {}
           data:
@@ -793,8 +633,9 @@
   - alias: If the third car garage door is open notify
     if:
     - condition: state
-      entity_id: binary_sensor.third_car_garage_door_opening_3
-      state: 'on'
+      entity_id: binary_sensor.third_car_garage_motion_sensor_contact
+      state:
+      - 'on'
     then:
     - metadata: {}
       data:
@@ -846,8 +687,8 @@
     target:
       entity_id:
       - switch.christmas_tree_switch_3
-      - switch.living_room_air_purifier_switch
-      - switch.living_room_side_light_switch
+      - switch.living_room_air_purifier_outlet
+      - switch.living_room_side_lights_outlet
   - metadata: {}
     data: {}
     target:
@@ -857,18 +698,16 @@
     data: {}
     target:
       entity_id:
-      - light.basement_bathroom_lights
-      - light.basement_entertainment_area_lights
-      - light.basement_stairs_lights
-      - light.gym_area_lights
       - light.kitchen_cabinet_lights
       - light.living_room_lights
-      - light.mechanical_room_lights
-      - light.pool_table_area_lights
-      - light.pool_table_light
-      - light.guest_bedroom_lights
-      - light.left_guest_bedroom_light_light
-      - light.right_guest_bedroom_light_light_2
+      - light.basement_bathroom_light_switch
+      - light.basement_entertainment_area_light_switch
+      - light.basement_stairs_light_switch
+      - light.gym_light_switch
+      - light.mechanical_room_light_switch
+      - light.pool_table_area_light_switch
+      - light.pool_table_light_switch
+      - light.guest_bedroom_light_switch
     action: light.turn_off
   mode: single
 - id: '1714824591977'
@@ -983,207 +822,11 @@
     metadata: {}
     data: {}
     target:
-      entity_id: switch.living_room_side_light_switch
+      entity_id:
+      - switch.living_room_side_lights_outlet
   - action: light.turn_off
     metadata: {}
     data: {}
     target:
       entity_id: light.living_room_lights
-  mode: single
-- id: '1743037637897'
-  alias: Turn On Basement Grow Lights
-  description: ''
-  triggers:
-  - trigger: time
-    at: 06:00:00
-  conditions: []
-  actions:
-  - action: switch.turn_on
-    metadata: {}
-    data: {}
-    target:
-      entity_id: switch.basement_grow_lights_switch
-  mode: single
-- id: '1743037694647'
-  alias: Turn Off Basement Grow Lights
-  description: ''
-  triggers:
-  - trigger: time
-    at: '18:00:00'
-  conditions: []
-  actions:
-  - action: switch.turn_off
-    metadata: {}
-    data: {}
-    target:
-      entity_id: switch.basement_grow_lights_switch
-  mode: single
-- id: '1749577082608'
-  alias: Front Door Unlocked Notification
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - lock.front_door_lock_door_lock
-    to: unlocked
-    for:
-      hours: 1
-      minutes: 0
-      seconds: 0
-  conditions:
-  - condition: state
-    entity_id: binary_sensor.front_door_sensor
-    state: 'off'
-    for:
-      hours: 1
-      minutes: 0
-      seconds: 0
-  actions:
-  - action: notify.mobile_app_tis_iphone
-    metadata: {}
-    data:
-      message: Front door unlocked for over an hour
-  mode: single
-- id: '1753314059071'
-  alias: Aidan's Night Stand Light Automation
-  description: ''
-  use_blueprint:
-    path: Malte/zha-ikea-four-button-remote-styrbar-for-lights-e2001-e2002.yaml
-    input:
-      remote: e0e52daeb29bc802759b6bdbb18df41b
-      light:
-        entity_id: light.aidan_s_night_stand_light
-      button_left_short: []
-- id: '1771026441200'
-  alias: Turn off guest bedroom flux
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - light.guest_bedroom_lights
-    to:
-    - 'off'
-  conditions: []
-  actions:
-  - action: switch.turn_off
-    metadata: {}
-    target:
-      entity_id: switch.guest_bedroom_flux
-    data: {}
-  - action: light.turn_off
-    metadata: {}
-    target:
-      entity_id:
-      - light.left_guest_bedroom_light_light
-      - light.right_guest_bedroom_light_light_2
-    data: {}
-  mode: single
-- id: '1771026500916'
-  alias: Turn on guest bedroom flux
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - light.guest_bedroom_lights
-    to:
-    - 'on'
-  conditions: []
-  actions:
-  - action: switch.turn_on
-    metadata: {}
-    target:
-      entity_id: switch.guest_bedroom_flux
-    data: {}
-  - action: light.turn_on
-    metadata: {}
-    target:
-      entity_id:
-      - light.left_guest_bedroom_light_light
-      - light.right_guest_bedroom_light_light_2
-    data: {}
-  mode: single
-- id: '1771104382981'
-  alias: Turn on Basement Bathroom lights with motion
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - binary_sensor.basement_bathroom_motion_sensor
-    to:
-    - 'on'
-  conditions: []
-  actions:
-  - action: light.turn_on
-    metadata: {}
-    target:
-      entity_id: light.basement_bathroom_lights
-    data:
-      transition: 0
-      brightness_pct: 52
-  mode: single
-- id: '1771104559312'
-  alias: Dim Basement Bathroom lights when no motion
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - binary_sensor.basement_bathroom_motion_sensor
-    to:
-    - 'off'
-  conditions: []
-  actions:
-  - action: light.turn_on
-    metadata: {}
-    target:
-      entity_id: light.basement_bathroom_lights
-    data:
-      transition: 5
-      brightness_pct: 30
-  mode: single
-- id: '1771104628644'
-  alias: Turn off Basement Bathroom lights when no motion
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - binary_sensor.basement_bathroom_motion_sensor
-    to:
-    - 'off'
-    for:
-      hours: 0
-      minutes: 0
-      seconds: 30
-  conditions: []
-  actions:
-  - action: light.turn_off
-    metadata: {}
-    target:
-      entity_id: light.basement_bathroom_lights
-    data:
-      transition: 3
-  mode: single
-- id: '1771255663573'
-  alias: Set Basemetnt Entertainment lights brightness
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id:
-    - light.basement_entertainment_area_lights
-    to:
-    - 'on'
-  conditions: []
-  actions:
-  - if:
-    - condition: state
-      entity_id: media_player.u8000f8836
-      state:
-      - 'on'
-    then:
-    - action: script.dim_basement_entertainment_lights_for_watching_tv
-      metadata: {}
-      data: {}
-    else:
-    - action: script.reset_basement_entertainment_lights
-      metadata: {}
-      data: {}
   mode: single
