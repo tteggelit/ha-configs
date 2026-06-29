@@ -198,6 +198,10 @@ devices:
     friendly_name: Aidan's Fan Light 3
   '0x7cb94c63427b0000':
     friendly_name: Aidan's Fan Light 5
+  '0x286d97000109954e':
+    friendly_name: Kitchen South Outlet
+  '0x286d97000102b203':
+    friendly_name: 3D Printer Outlet
 groups:
   '1':
     friendly_name: Guest Bedroom Lights
