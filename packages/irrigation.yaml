@@ -127,6 +127,24 @@ input_datetime:
     has_time: true
     icon: mdi:clock-end
 
+  back_garden_scheduled_run:
+    name: Back Garden Scheduled Run
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-clock
+
+  side_garden_scheduled_run:
+    name: Side Garden Scheduled Run
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-clock
+
+  front_garden_scheduled_run:
+    name: Front Garden Scheduled Run
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-clock
+
 
 input_select:
 
@@ -1624,6 +1642,156 @@ automation:
           level: info
     mode: single
     max_exceeded: silent
+
+  # ===========================================================================
+  # ONE-TIME SCHEDULED RUNS
+  #
+  # Each automation fires at the datetime set in its corresponding helper.
+  # After firing (whether watering ran or was blocked), the helper is reset
+  # to 1970-01-01 00:00:00 — a sentinel "no scheduled run" value that HA
+  # will not re-trigger on since it's in the past.
+  #
+  # These bypass normal gate conditions (season window, moisture urgency,
+  # weather, pause) since a scheduled run is an intentional override.
+  # The global run lock is still respected — if another zone is already
+  # running when the scheduled time arrives, the run is skipped and the
+  # helper is cleared; the user can reschedule if needed.
+  #
+  # Clearing a pending scheduled run from the dashboard: set the datetime
+  # helper to any past date, or use the "Clear" button in the dashboard card.
+  # ===========================================================================
+
+  - id: irrigation_scheduled_run_back_garden
+    alias: "Irrigation — Scheduled Run: Back Garden"
+    description: >
+      Fires the back vegetable garden irrigation script at the date/time set
+      in input_datetime.back_garden_scheduled_run, then clears the helper.
+      Bypasses seasonal, weather, and moisture gate conditions.
+    triggers:
+      - trigger: time
+        at: input_datetime.back_garden_scheduled_run
+    conditions:
+      # Only act if the scheduled time is actually in the future (not the
+      # sentinel 1970 value or a leftover past value from a previous run)
+      - condition: template
+        value_template: >
+          {{ states('input_datetime.back_garden_scheduled_run') not in
+             ['unknown','unavailable','']
+             and as_datetime(states('input_datetime.back_garden_scheduled_run'))
+                | as_local > (now() - timedelta(minutes=1)) }}
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.irrigation_running
+                state: "on"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Scheduled run: Back Garden skipped — another zone is
+                    already running. Reschedule if needed.
+                  level: warning
+        default:
+          - service: system_log.write
+            data:
+              message: "Scheduled run: Back Garden starting."
+              level: info
+          - service: script.back_vegetable_garden_irrigation
+            data: {}
+      # Always clear the helper after attempting the run
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.back_garden_scheduled_run
+        data:
+          datetime: "1970-01-01 00:00:00"
+    mode: single
+
+  - id: irrigation_scheduled_run_side_garden
+    alias: "Irrigation — Scheduled Run: Side Garden"
+    description: >
+      Fires the side vegetable garden irrigation script at the date/time set
+      in input_datetime.side_garden_scheduled_run, then clears the helper.
+      Bypasses seasonal, weather, and moisture gate conditions.
+    triggers:
+      - trigger: time
+        at: input_datetime.side_garden_scheduled_run
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_datetime.side_garden_scheduled_run') not in
+             ['unknown','unavailable','']
+             and as_datetime(states('input_datetime.side_garden_scheduled_run'))
+                | as_local > (now() - timedelta(minutes=1)) }}
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.irrigation_running
+                state: "on"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Scheduled run: Side Garden skipped — another zone is
+                    already running. Reschedule if needed.
+                  level: warning
+        default:
+          - service: system_log.write
+            data:
+              message: "Scheduled run: Side Garden starting."
+              level: info
+          - service: script.side_vegetable_garden_irrigation
+            data: {}
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.side_garden_scheduled_run
+        data:
+          datetime: "1970-01-01 00:00:00"
+    mode: single
+
+  - id: irrigation_scheduled_run_front_garden
+    alias: "Irrigation — Scheduled Run: Front Garden"
+    description: >
+      Fires the front garden irrigation script at the date/time set in
+      input_datetime.front_garden_scheduled_run, then clears the helper.
+      Bypasses seasonal, weather, and moisture gate conditions.
+    triggers:
+      - trigger: time
+        at: input_datetime.front_garden_scheduled_run
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_datetime.front_garden_scheduled_run') not in
+             ['unknown','unavailable','']
+             and as_datetime(states('input_datetime.front_garden_scheduled_run'))
+                | as_local > (now() - timedelta(minutes=1)) }}
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.irrigation_running
+                state: "on"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: >
+                    Scheduled run: Front Garden skipped — another zone is
+                    already running. Reschedule if needed.
+                  level: warning
+        default:
+          - service: system_log.write
+            data:
+              message: "Scheduled run: Front Garden starting."
+              level: info
+          - service: script.front_garden_irrigation
+            data: {}
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.front_garden_scheduled_run
+        data:
+          datetime: "1970-01-01 00:00:00"
+    mode: single
 
   # ===========================================================================
   # QUORUM FAULT NOTIFICATIONS
