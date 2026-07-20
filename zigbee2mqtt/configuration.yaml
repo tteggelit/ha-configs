@@ -63,7 +63,7 @@ devices:
   '0x282c02bfffea40ec':
     friendly_name: Living Room Side Lights Outlet
   '0x00124b00226d7023':
-    friendly_name: Aidan's Bedroom Window Lights Outlet
+    friendly_name: Ash's Bedroom Window Lights Outlet
   '0x7cb03eaa00a6e71c':
     friendly_name: Studio Shelf Lights
   '0x24fd5b0001092f10':
@@ -94,10 +94,8 @@ devices:
     friendly_name: Mechanical Room Light Switch
   '0x282c02bfffea3741':
     friendly_name: Grow Tent Outlet
-  '0x142d41fffead52b1':
-    friendly_name: Backyard Outlets
   '0x286d9700011515eb':
-    friendly_name: Aidan's Bedroom Door Motion Sensor
+    friendly_name: Ash's Bedroom Door Motion Sensor
   '0x286d97000114ddcc':
     friendly_name: Master Bathroom Motion Sensor
   '0x286d9700010a620c':
@@ -155,19 +153,11 @@ devices:
   '0x001788010ec0211a':
     friendly_name: Basement Entertainment Light 4
   '0xb0ce181400051cda':
-    friendly_name: Aidan's Nightstand Light
+    friendly_name: Ash's Nightstand Light
   '0xffffb40e0605b8bd':
     friendly_name: Back Vegetable Garden Moisture Sensor 1
-  '0xffffb40e06058bfc':
-    friendly_name: Back Vegetable Garden Moisture Sensor 3
-  '0xffffb40e0605ad78':
-    friendly_name: Back Vegetable Garden Moisture Sensor 2
-  '0xffffb40e0606acc9':
-    friendly_name: Back Vegetable Garden Moisture Sensor 4
   '0xffffb40e0606b0d7':
     friendly_name: Back Vegetable Garden Moisture Sensor 5
-  '0xffffb40e0605e618':
-    friendly_name: Side Vegetable Garden Moisture Sensor 1
   '0xffffb40e0606aa42':
     friendly_name: Side Vegetable Garden Moisture Sensor 2
   '0xffffb40e0606b1b4':
@@ -183,25 +173,45 @@ devices:
   '0xf84477fffe0b6ba0':
     friendly_name: Front Garden Faucet Valve
   '0x44e2f8fffe4da509':
-    friendly_name: Aidan's Fan Lights Remote
+    friendly_name: Ash's Fan Lights Remote
   '0x44e2f8fffe3e670b':
-    friendly_name: Aidan's Nightstand Light Remote
+    friendly_name: Ash's Nightstand Light Remote
   '0x7cb94c631d790000':
-    friendly_name: Aidan's Fan Light 2
+    friendly_name: Ash's Fan Light 2
   '0x7cb94c78cdd30000':
-    friendly_name: Aidan's Fan Light 6
+    friendly_name: Ash's Fan Light 6
   '0x7cb94c631ecb0000':
-    friendly_name: Aidan's Fan Light 4
+    friendly_name: Ash's Fan Light 4
   '0xc4d7fdbc1c3c0000':
-    friendly_name: Aidan's Fan Light 1
+    friendly_name: Ash's Fan Light 1
   '0xa81710b8292b0000':
-    friendly_name: Aidan's Fan Light 3
+    friendly_name: Ash's Fan Light 3
   '0x7cb94c63427b0000':
-    friendly_name: Aidan's Fan Light 5
+    friendly_name: Ash's Fan Light 5
   '0x286d97000109954e':
     friendly_name: Kitchen South Outlet
   '0x286d97000102b203':
     friendly_name: 3D Printer Outlet
+  '0x142d41fffead52b1':
+    friendly_name: Backyard Outlets
+  '0x0c2a6ffffe6bcacc':
+    friendly_name: Playroom Cabinet Lights
+  '0x286d9700011656d1':
+    friendly_name: Right Playroom Cabinet Door Sensor
+  '0x286d9700011656f5':
+    friendly_name: Middle Playroom Cabinet Door Sensor
+  '0x286d9700011655e0':
+    friendly_name: Left Playroom Cabinet Door Sensor
+  '0x7c3e8237db1a0000':
+    friendly_name: Back Vegetable Garden Moisture Sensor 2
+  '0x7c3e8237c1d50000':
+    friendly_name: Back Vegetable Garden Moisture Sensor 3
+  '0x7c3e8237c4080000':
+    friendly_name: Back Vegetable Garden Moisture Sensor 4
+  '0x7c3e8237ebb20000':
+    friendly_name: Side Vegetable Garden Moisture Sensor 1
+  '0x103597000016b3d7':
+    friendly_name: Playroom Cabinet Lights Remote
 groups:
   '1':
     friendly_name: Guest Bedroom Lights
@@ -212,4 +222,6 @@ groups:
   '4':
     friendly_name: Basement Entertainment Lights
   '5':
-    friendly_name: Aidan's Fan Lights
+    friendly_name: Ash's Fan Lights
+    homeassistant:
+      name: null
