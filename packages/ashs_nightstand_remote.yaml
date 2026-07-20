@@ -18,13 +18,13 @@
 
 # Scripts
 script:
-  cycle_aidans_nightstand_light_color:
+  cycle_ashs_nightstand_light_color:
     alias: Cycle Aidan's Nightstand Light Color
     mode: restart
     fields:
       entity_id:
         description: The light entity to control
-        example: light.aidan_s_nightstand_light
+        example: light.ash_s_nightstand_light
       direction:
         description: Direction to cycle (forward or backward)
         example: forward
@@ -160,7 +160,7 @@ automation:
             sequence:
               - service: light.turn_on
                 target:
-                  entity_id: light.aidan_s_nightstand_light
+                  entity_id: light.ash_s_nightstand_light
                 data:
                   brightness_pct: 100
           
@@ -171,7 +171,7 @@ automation:
             sequence:
               - service: light.turn_off
                 target:
-                  entity_id: light.aidan_s_nightstand_light
+                  entity_id: light.ash_s_nightstand_light
           
           # Brightness up (hold top button)
           - conditions:
@@ -182,11 +182,11 @@ automation:
                   while:
                     - condition: template
                       value_template: >
-                        {{ state_attr('light.aidan_s_nightstand_light', 'brightness') | int(0) < 255 }}
+                        {{ state_attr('light.ash_s_nightstand_light', 'brightness') | int(0) < 255 }}
                   sequence:
                     - service: light.turn_on
                       target:
-                        entity_id: light.aidan_s_nightstand_light
+                        entity_id: light.ash_s_nightstand_light
                       data:
                         brightness_step_pct: 10
                     - delay:
@@ -201,18 +201,18 @@ automation:
                   while:
                     - condition: template
                       value_template: >
-                        {{ state_attr('light.aidan_s_nightstand_light', 'brightness') | int(0) > 23 }}
+                        {{ state_attr('light.ash_s_nightstand_light', 'brightness') | int(0) > 23 }}
                   sequence:
                     - service: light.turn_on
                       target:
-                        entity_id: light.aidan_s_nightstand_light
+                        entity_id: light.ash_s_nightstand_light
                       data:
                         brightness_step_pct: -10
                     - delay:
                         milliseconds: 200
               - service: light.turn_on
                 target:
-                  entity_id: light.aidan_s_nightstand_light
+                  entity_id: light.ash_s_nightstand_light
                 data:
                   brightness_pct: 3
           
@@ -221,9 +221,9 @@ automation:
               - condition: trigger
                 id: color_right
             sequence:
-              - service: script.cycle_aidans_nightstand_light_color
+              - service: script.cycle_ashs_nightstand_light_color
                 data:
-                  entity_id: light.aidan_s_nightstand_light
+                  entity_id: light.ash_s_nightstand_light
                   direction: forward
           
           # Cycle color backward (left arrow)
@@ -231,7 +231,7 @@ automation:
               - condition: trigger
                 id: color_left
             sequence:
-              - service: script.cycle_aidans_nightstand_light_color
+              - service: script.cycle_ashs_nightstand_light_color
                 data:
-                  entity_id: light.aidan_s_nightstand_light
+                  entity_id: light.ash_s_nightstand_light
                   direction: backward

@@ -18,13 +18,13 @@
 
 # Scripts
 script:
-  cycle_aidans_fan_light_color:
+  cycle_ashs_fan_light_color:
     alias: Cycle Aidan's Fan Light Color
     mode: restart
     fields:
       entity_id:
         description: The light entity to control
-        example: light.aidan_s_fan_light_1
+        example: light.ash_s_fan_light_1
       direction:
         description: Direction to cycle (forward or backward)
         example: forward
@@ -163,12 +163,12 @@ automation:
               - service: light.turn_on
                 target:
                   entity_id:
-                    - light.aidan_s_fan_light_1
-                    - light.aidan_s_fan_light_2
-                    - light.aidan_s_fan_light_3
-                    - light.aidan_s_fan_light_4
-                    - light.aidan_s_fan_light_5
-                    - light.aidan_s_fan_light_6
+                    - light.ash_s_fan_light_1
+                    - light.ash_s_fan_light_2
+                    - light.ash_s_fan_light_3
+                    - light.ash_s_fan_light_4
+                    - light.ash_s_fan_light_5
+                    - light.ash_s_fan_light_6
                 data:
                   brightness_pct: 100
           
@@ -180,12 +180,12 @@ automation:
               - service: light.turn_off
                 target:
                   entity_id:
-                    - light.aidan_s_fan_light_1
-                    - light.aidan_s_fan_light_2
-                    - light.aidan_s_fan_light_3
-                    - light.aidan_s_fan_light_4
-                    - light.aidan_s_fan_light_5
-                    - light.aidan_s_fan_light_6
+                    - light.ash_s_fan_light_1
+                    - light.ash_s_fan_light_2
+                    - light.ash_s_fan_light_3
+                    - light.ash_s_fan_light_4
+                    - light.ash_s_fan_light_5
+                    - light.ash_s_fan_light_6
           
           # Brightness up (hold top button)
           - conditions:
@@ -196,17 +196,17 @@ automation:
                   while:
                     - condition: template
                       value_template: >
-                        {{ state_attr('light.aidan_s_fan_light_1', 'brightness') | int(0) < 255 }}
+                        {{ state_attr('light.ash_s_fan_light_1', 'brightness') | int(0) < 255 }}
                   sequence:
                     - service: light.turn_on
                       target:
                         entity_id:
-                          - light.aidan_s_fan_light_1
-                          - light.aidan_s_fan_light_2
-                          - light.aidan_s_fan_light_3
-                          - light.aidan_s_fan_light_4
-                          - light.aidan_s_fan_light_5
-                          - light.aidan_s_fan_light_6
+                          - light.ash_s_fan_light_1
+                          - light.ash_s_fan_light_2
+                          - light.ash_s_fan_light_3
+                          - light.ash_s_fan_light_4
+                          - light.ash_s_fan_light_5
+                          - light.ash_s_fan_light_6
                       data:
                         brightness_step_pct: 10
                     - delay:
@@ -221,17 +221,17 @@ automation:
                   while:
                     - condition: template
                       value_template: >
-                        {{ state_attr('light.aidan_s_fan_light_1', 'brightness') | int(0) > 23 }}
+                        {{ state_attr('light.ash_s_fan_light_1', 'brightness') | int(0) > 23 }}
                   sequence:
                     - service: light.turn_on
                       target:
                         entity_id:
-                          - light.aidan_s_fan_light_1
-                          - light.aidan_s_fan_light_2
-                          - light.aidan_s_fan_light_3
-                          - light.aidan_s_fan_light_4
-                          - light.aidan_s_fan_light_5
-                          - light.aidan_s_fan_light_6
+                          - light.ash_s_fan_light_1
+                          - light.ash_s_fan_light_2
+                          - light.ash_s_fan_light_3
+                          - light.ash_s_fan_light_4
+                          - light.ash_s_fan_light_5
+                          - light.ash_s_fan_light_6
                       data:
                         brightness_step_pct: -10
                     - delay:
@@ -239,12 +239,12 @@ automation:
               - service: light.turn_on
                 target:
                   entity_id:
-                    - light.aidan_s_fan_light_1
-                    - light.aidan_s_fan_light_2
-                    - light.aidan_s_fan_light_3
-                    - light.aidan_s_fan_light_4
-                    - light.aidan_s_fan_light_5
-                    - light.aidan_s_fan_light_6
+                    - light.ash_s_fan_light_1
+                    - light.ash_s_fan_light_2
+                    - light.ash_s_fan_light_3
+                    - light.ash_s_fan_light_4
+                    - light.ash_s_fan_light_5
+                    - light.ash_s_fan_light_6
                 data:
                   brightness_pct: 3
           
@@ -253,15 +253,15 @@ automation:
               - condition: trigger
                 id: color_right
             sequence:
-              - service: script.cycle_aidans_fan_light_color
+              - service: script.cycle_ashs_fan_light_color
                 data:
                   entity_id:
-                    - light.aidan_s_fan_light_1
-                    - light.aidan_s_fan_light_2
-                    - light.aidan_s_fan_light_3
-                    - light.aidan_s_fan_light_4
-                    - light.aidan_s_fan_light_5
-                    - light.aidan_s_fan_light_6
+                    - light.ash_s_fan_light_1
+                    - light.ash_s_fan_light_2
+                    - light.ash_s_fan_light_3
+                    - light.ash_s_fan_light_4
+                    - light.ash_s_fan_light_5
+                    - light.ash_s_fan_light_6
                   direction: forward
           
           # Cycle color backward (left arrow)
@@ -269,13 +269,13 @@ automation:
               - condition: trigger
                 id: color_left
             sequence:
-              - service: script.cycle_aidans_fan_light_color
+              - service: script.cycle_ashs_fan_light_color
                 data:
                   entity_id:
-                    - light.aidan_s_fan_light_1
-                    - light.aidan_s_fan_light_2
-                    - light.aidan_s_fan_light_3
-                    - light.aidan_s_fan_light_4
-                    - light.aidan_s_fan_light_5
-                    - light.aidan_s_fan_light_6
+                    - light.ash_s_fan_light_1
+                    - light.ash_s_fan_light_2
+                    - light.ash_s_fan_light_3
+                    - light.ash_s_fan_light_4
+                    - light.ash_s_fan_light_5
+                    - light.ash_s_fan_light_6
                   direction: backward
