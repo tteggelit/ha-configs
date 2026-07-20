@@ -906,6 +906,10 @@ template:
             idle
           {% endif %}
 
+      # =======================================================================
+      # (end of sensor list)
+      # =======================================================================
+
 
 # =============================================================================
 # TOGGLE SCRIPTS
@@ -1647,18 +1651,17 @@ automation:
   # ONE-TIME SCHEDULED RUNS
   #
   # Each automation fires at the datetime set in its corresponding helper.
+  # The helper is set via the more-info dialog (tap the card) which uses
+  # HA's atomic date+time save — same as the Helpers UI — avoiding the
+  # Lovelace entities card inline picker bug.
+  #
   # After firing (whether watering ran or was blocked), the helper is reset
-  # to 1970-01-01 00:00:00 — a sentinel "no scheduled run" value that HA
-  # will not re-trigger on since it's in the past.
+  # to 1970-01-01 00:00:00 so the automation won't re-fire.
+  # Sentinel "no run scheduled": datetime == 1970-01-01 00:00:00.
   #
   # These bypass normal gate conditions (season window, moisture urgency,
   # weather, pause) since a scheduled run is an intentional override.
-  # The global run lock is still respected — if another zone is already
-  # running when the scheduled time arrives, the run is skipped and the
-  # helper is cleared; the user can reschedule if needed.
-  #
-  # Clearing a pending scheduled run from the dashboard: set the datetime
-  # helper to any past date, or use the "Clear" button in the dashboard card.
+  # The global run lock is still respected.
   # ===========================================================================
 
   - id: irrigation_scheduled_run_back_garden
@@ -1671,8 +1674,6 @@ automation:
       - trigger: time
         at: input_datetime.back_garden_scheduled_run
     conditions:
-      # Only act if the scheduled time is actually in the future (not the
-      # sentinel 1970 value or a leftover past value from a previous run)
       - condition: template
         value_template: >
           {{ states('input_datetime.back_garden_scheduled_run') not in
@@ -1699,7 +1700,6 @@ automation:
               level: info
           - service: script.back_vegetable_garden_irrigation
             data: {}
-      # Always clear the helper after attempting the run
       - service: input_datetime.set_datetime
         target:
           entity_id: input_datetime.back_garden_scheduled_run
