@@ -11,8 +11,8 @@
 
 # Automations
 automation:
-  - alias: PLayroom Cabinet Lights Control
-    description: Control lightis with Bilresa remote
+  - alias: Playroom Cabinet Lights Control
+    description: Control lights with IKEA Bilresa remote
     mode: restart
     trigger:
       - platform: mqtt
@@ -104,3 +104,49 @@ automation:
                     - light.playroom_cabinet_lights
                 data:
                   brightness_pct: 3
+  - alias: Turn On Playroom Cabinet Lights When A Door Opens
+    description: ''
+    triggers:
+    - trigger: door.opened
+      target:
+        entity_id:
+        - binary_sensor.left_playroom_cabinet_door_sensor_contact
+        - binary_sensor.middle_playroom_cabinet_door_sensor_contact
+        - binary_sensor.right_playroom_cabinet_door_sensor_contact
+      options:
+        for: 00:00:00
+        behavior: first
+    conditions: []
+    actions:
+    - action: light.turn_on
+      metadata: {}
+      target:
+        entity_id: light.playroom_cabinet_lights
+      data:
+        transition: 2
+        brightness_pct: 100
+    mode: single
+  - alias: Turn Off Playroom Cabinet Lights When All Doors Close
+    description: ''
+    triggers:
+    - trigger: door.closed
+      target:
+        entity_id:
+        - binary_sensor.left_playroom_cabinet_door_sensor_contact
+        - binary_sensor.middle_playroom_cabinet_door_sensor_contact
+        - binary_sensor.right_playroom_cabinet_door_sensor_contact
+      options:
+        for:
+          hours: 0
+          minutes: 0
+          seconds: 30
+        behavior: all
+    conditions: []
+    actions:
+    - action: light.turn_off
+      metadata: {}
+      target:
+        entity_id: light.playroom_cabinet_lights
+      data:
+        transition: 3
+    mode: single
