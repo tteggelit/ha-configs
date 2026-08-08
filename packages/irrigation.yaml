@@ -59,6 +59,10 @@ input_boolean:
     name: Irrigation Force Watering Enabled
     icon: mdi:calendar-refresh
 
+  irrigation_auto_resume:
+    name: Irrigation Auto Resume After Interruption
+    icon: mdi:restart
+
 
 input_number:
 
@@ -87,6 +91,14 @@ input_number:
     unit_of_measurement: days
     mode: box
     icon: mdi:calendar-clock
+
+  irrigation_total_cycles:
+    name: Irrigation Total Cycles (current run)
+    min: 0
+    max: 10
+    step: 1
+    mode: box
+    icon: mdi:counter
 
 
 input_datetime:
@@ -144,6 +156,17 @@ input_datetime:
     has_date: true
     has_time: true
     icon: mdi:calendar-clock
+
+
+input_text:
+
+  irrigation_active_zone:
+    name: Irrigation Active Zone
+    max: 100
+    icon: mdi:sprout
+    # Set by the Cycle & Soak blueprint when a run starts; cleared on all
+    # normal exit paths. If HA restarts mid-run this survives the restart
+    # and tells the recovery automation which zone was interrupted.
 
 
 input_select:
@@ -1791,6 +1814,211 @@ automation:
           entity_id: input_datetime.front_garden_scheduled_run
         data:
           datetime: "1970-01-01 00:00:00"
+    mode: single
+
+  # ===========================================================================
+  # INTERRUPTED RUN RECOVERY
+  #
+  # Detects orphaned irrigation state: the global run lock held while NO zone
+  # script is executing. This happens when HA restarts mid-run (scripts never
+  # survive restarts) or when a script reload kills a running script.
+  #
+  # Consequences of an orphaned run without recovery:
+  #   - B-hyve valves: device self-terminates on its own timer (safe-ish)
+  #   - Sonoff/switch valves: the script was solely responsible for closing —
+  #     THE VALVE STAYS OPEN INDEFINITELY
+  #   - The stale lock permanently blocks all future watering
+  #
+  # Recovery actions: defensively close every zone valve, clear the lock and
+  # flags, give partial last-watered credit if at least one full cycle
+  # completed, notify, and optionally resume the interrupted zone with its
+  # remaining cycles (input_boolean.irrigation_auto_resume).
+  #
+  # Two triggers: HA start (with settle delay) catches restarts immediately;
+  # the 15-minute watchdog catches script-reload kills and anything else.
+  #
+  # ── CONFIGURE ──────────────────────────────────────────────────────────────
+  # 1. The valve/switch entity IDs in the "close all valves" steps must match
+  #    your zone valves.
+  # 2. The zone-name mappings in the choose blocks must EXACTLY match the
+  #    zone_name input configured in each zone's blueprint script.
+  # ───────────────────────────────────────────────────────────────────────────
+
+  - id: irrigation_orphan_recovery
+    alias: "Irrigation — Interrupted Run Recovery"
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/15"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.irrigation_running
+        state: "on"
+      # No zone script is actually running (is_state is false for
+      # unavailable/unknown too, which safely counts as not-running)
+      - condition: template
+        value_template: >
+          {{ not is_state('script.back_vegetable_garden_irrigation', 'on')
+             and not is_state('script.side_vegetable_garden_irrigation', 'on')
+             and not is_state('script.front_garden_irrigation', 'on') }}
+    actions:
+      # On a fresh restart, give integrations time to load before closing valves
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay:
+              seconds: 30
+      - variables:
+          zone: "{{ states('input_text.irrigation_active_zone') }}"
+          total: "{{ states('input_number.irrigation_total_cycles') | int(0) }}"
+          counter: "{{ states('input_number.irrigation_cycle_counter') | int(0) }}"
+          completed: "{{ [counter - 1, 0] | max }}"
+          remaining: >
+            {% if total > 0 %}
+              {{ [ [total - counter + 1, 1] | max, total ] | min }}
+            {% else %}0{% endif %}
+          resume: >
+            {{ is_state('input_boolean.irrigation_auto_resume', 'on')
+               and zone not in ['', 'unknown', 'unavailable']
+               and total | int(0) > 0 }}
+
+      # ── Defensively close every zone valve (CONFIGURE entity IDs) ─────────
+      - service: valve.close_valve
+        target:
+          entity_id: valve.back_vegetable_garden_timer_zone
+        continue_on_error: true
+      - service: valve.close_valve
+        target:
+          entity_id: valve.vegetable_garden_timer_vegetable_garden_zone
+        continue_on_error: true
+      - service: switch.turn_off
+        target:
+          entity_id: switch.front_garden_faucet_valve
+        continue_on_error: true
+
+      # ── Clear stale state ─────────────────────────────────────────────────
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.irrigation_running
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.irrigation_cancel
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.irrigation_cycle_counter
+        data:
+          value: 0
+
+      # ── Partial credit: if at least one full cycle completed and we are
+      #    NOT resuming, record last-watered so the morning evaluation does
+      #    not immediately run a full extra session on a mostly-watered zone.
+      #    (If resuming, the resumed script's completion records it.) ────────
+      - if:
+          - condition: template
+            value_template: "{{ completed | int(0) >= 1 and not resume }}"
+        then:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ zone == 'Back Vegetable Garden' }}"
+                sequence:
+                  - service: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.back_garden_last_watered
+                    data:
+                      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ zone == 'Side Vegetable Garden' }}"
+                sequence:
+                  - service: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.side_garden_last_watered
+                    data:
+                      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ zone == 'Front Garden' }}"
+                sequence:
+                  - service: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.front_garden_last_watered
+                    data:
+                      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+      # ── Log and notify ────────────────────────────────────────────────────
+      - service: logbook.log
+        data:
+          name: "Irrigation Recovery"
+          entity_id: input_boolean.irrigation_running
+          message: >
+            Orphaned run detected
+            {%- if zone not in ['', 'unknown', 'unavailable'] %}
+            for {{ zone }} (interrupted at cycle {{ counter }} of {{ total }},
+            {{ completed }} completed)
+            {%- else %}
+            (zone unknown)
+            {%- endif -%}
+            . All valves closed, lock cleared.
+            {{ 'Resuming with ' ~ remaining ~ ' cycle(s).' if resume
+               else 'Not resuming (auto-resume off or zone unknown).' }}
+      - repeat:
+          for_each: >
+            {{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') or [] }}
+          sequence:
+            - service: notify.send_message
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                title: "⚠️ Irrigation Interrupted"
+                message: >
+                  An irrigation run was interrupted (HA restart or reload).
+                  {%- if zone not in ['', 'unknown', 'unavailable'] %}
+                  Zone: {{ zone }} — was on cycle {{ counter }} of {{ total }}.
+                  {%- endif %}
+                  All valves closed and the run lock cleared.
+                  {{ 'Auto-resuming with ' ~ remaining ~ ' remaining cycle(s).'
+                     if resume else 'Auto-resume is off — re-run manually if needed.' }}
+
+      # ── Clear run metadata, then optionally resume ────────────────────────
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.irrigation_active_zone
+        data:
+          value: ""
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.irrigation_total_cycles
+        data:
+          value: 0
+      - if:
+          - condition: template
+            value_template: "{{ resume }}"
+        then:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ zone == 'Back Vegetable Garden' }}"
+                sequence:
+                  - service: script.back_vegetable_garden_irrigation
+                    data:
+                      num_cycles: "{{ remaining | int(1) }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ zone == 'Side Vegetable Garden' }}"
+                sequence:
+                  - service: script.side_vegetable_garden_irrigation
+                    data:
+                      num_cycles: "{{ remaining | int(1) }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ zone == 'Front Garden' }}"
+                sequence:
+                  - service: script.front_garden_irrigation
+                    data:
+                      num_cycles: "{{ remaining | int(1) }}"
     mode: single
 
   # ===========================================================================
