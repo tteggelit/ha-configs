@@ -3,7 +3,7 @@ todo_test:
   sequence:
   - variables:
       project:
-        entity_id: todo.personal_2
+        entity_id: todo.personal
         name: Personal
   - target:
       entity_id: '{{ project.entity_id }}'
@@ -68,31 +68,8 @@ todo_test:
         action: todoist.new_task
   mode: single
   icon: mdi:checkbox-marked-circle-auto-outline
-back_vegetable_garden_irrigation:
-  alias: Back Vegetable Garden Irrigation
-  use_blueprint:
-    path: cycle_soak_watering.yaml
-    input:
-      valve_entity: valve.back_vegetable_garden_timer_zone
-      zone_name: Back Vegetable Garden
-      notify_entities:
-      - notify.tis_iphone
-      notify_on_completion: true
-      num_cycles: 4
-  description: ''
-side_vegetable_garden_irrigation:
-  alias: Side Vegetable Garden Irrigation
-  use_blueprint:
-    path: cycle_soak_watering.yaml
-    input:
-      valve_entity: valve.vegetable_garden_timer_vegetable_garden_zone
-      zone_name: Side Vegetable Garden
-      notify_entities:
-      - notify.tis_iphone
-      notify_on_completion: true
-  description: ''
-front_garden_irrigation:
-  alias: Front Garden Irrigation
+cycle_soak_zone_watering_cancelable_monitored:
+  alias: Cycle & Soak Zone Watering (Cancelable + Monitored)
   use_blueprint:
     path: cycle_soak_watering.yaml
     input:
@@ -100,4 +77,20 @@ front_garden_irrigation:
       zone_name: Front Garden Irrigation
       timer_type: standard
       notify_on_completion: true
+cycle_soak_zone_watering_cancelable_monitored_2:
+  alias: Side Vegetable Garden Irrigation
+  use_blueprint:
+    path: cycle_soak_watering.yaml
+    input:
+      valve_entity: valve.vegetable_garden_timer_vegetable_garden_zone
+      zone_name: Side Vegetable Garden
+      notify_on_completion: true
   description: ''
+cycle_soak_zone_watering_cancelable_monitored_3:
+  alias: Cycle & Soak Zone Watering (Cancelable + Monitored)
+  use_blueprint:
+    path: cycle_soak_watering.yaml
+    input:
+      valve_entity: valve.back_vegetable_garden_timer_zone
+      zone_name: Back Vegetable Garden
+      notify_on_completion: true

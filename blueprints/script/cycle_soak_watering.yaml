@@ -146,7 +146,12 @@ variables:
   var_timer_type: !input timer_type
   var_cycle_duration: !input cycle_duration
   var_soak_duration: !input soak_duration
-  var_num_cycles: !input num_cycles
+  # num_cycles can be overridden per-call by passing num_cycles in the
+  # script's service data (used for reduced runs and interrupted-run
+  # resumption). The !input value is only the default. NOTE: variables are
+  # rendered in order, so the _default line must come first.
+  var_num_cycles_default: !input num_cycles
+  var_num_cycles: "{{ num_cycles | default(var_num_cycles_default) | int(3) }}"
   var_notify_on_completion: !input notify_on_completion
 
 sequence:
@@ -203,10 +208,25 @@ sequence:
     data:
       value: 0
 
-  # ── Acquire run lock ────────────────────────────────────────────────────────
+  # ── Acquire run lock and record run metadata ───────────────────────────────
+  # The active zone name and total planned cycles are recorded so the
+  # interrupted-run recovery automation (irrigation package) can report and
+  # optionally resume this run if HA restarts or the script is killed.
   - service: input_boolean.turn_on
     target:
       entity_id: input_boolean.irrigation_running
+
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.irrigation_active_zone
+    data:
+      value: "{{ var_zone_name }}"
+
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.irrigation_total_cycles
+    data:
+      value: "{{ var_num_cycles | int(3) }}"
 
   # ── Main cycle loop ─────────────────────────────────────────────────────────
   - repeat:
@@ -300,6 +320,16 @@ sequence:
                   - service: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.irrigation_running
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.irrigation_active_zone
+                    data:
+                      value: ""
+                  - service: input_number.set_value
+                    target:
+                      entity_id: input_number.irrigation_total_cycles
+                    data:
+                      value: 0
                   - service: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.irrigation_cancel
@@ -352,6 +382,16 @@ sequence:
                   - service: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.irrigation_running
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.irrigation_active_zone
+                    data:
+                      value: ""
+                  - service: input_number.set_value
+                    target:
+                      entity_id: input_number.irrigation_total_cycles
+                    data:
+                      value: 0
                   - stop: "Valve closed prematurely — alert sent."
 
         # ── End of cycle ──────────────────────────────────────────────────────
@@ -411,6 +451,16 @@ sequence:
                 - service: input_boolean.turn_off
                   target:
                     entity_id: input_boolean.irrigation_running
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.irrigation_active_zone
+                  data:
+                    value: ""
+                - service: input_number.set_value
+                  target:
+                    entity_id: input_number.irrigation_total_cycles
+                  data:
+                    value: 0
                 - service: input_boolean.turn_off
                   target:
                     entity_id: input_boolean.irrigation_cancel
@@ -428,6 +478,18 @@ sequence:
   - service: input_boolean.turn_off
     target:
       entity_id: input_boolean.irrigation_running
+
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.irrigation_active_zone
+    data:
+      value: ""
+
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.irrigation_total_cycles
+    data:
+      value: 0
 
   - service: system_log.write
     data:
