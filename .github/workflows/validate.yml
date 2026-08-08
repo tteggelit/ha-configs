@@ -1,0 +1,59 @@
+name: Validate config
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint dependencies
+        run: pip install "yamllint==1.38.0" pyyaml
+
+      - name: yamllint
+        run: |
+          yamllint -c .yamllint.yaml \
+            $(git ls-files '*.yaml' '*.yml' | grep -v '^www/')
+
+      - name: HA-tag-aware YAML syntax check
+        run: |
+          python3 scripts/hooks/check_yaml_syntax.py \
+            $(git ls-files '*.yaml' '*.yml' | grep -v '^www/')
+
+      - name: secrets.yaml.example drift check
+        run: |
+          python3 scripts/hooks/check_secrets_drift.py \
+            $(git ls-files '*.yaml' '*.yml' | grep -v '^www/')
+
+      - name: Home Assistant config check
+        uses: frenck/action-home-assistant@v3
+        with:
+          path: "."
+          secrets: "./secrets.yaml.example"
+          # Pinned to the version actually running on the live host so
+          # this reflects reality rather than silently tracking whatever
+          # is newest upstream. .HA_VERSION is host-local/gitignored, so
+          # it can't be auto-detected here -- update this whenever the
+          # host is upgraded (check via the Settings > About page or
+          # `ha core info` over SSH).
+          version: "2026.7.0"
+
+      - name: Set up ESPHome secrets
+        run: cp secrets.yaml.example esphome/secrets.yaml
+
+      - name: ESPHome config check
+        run: |
+          pip install esphome
+          for f in esphome/*.yaml; do
+            esphome config "$f"
+          done

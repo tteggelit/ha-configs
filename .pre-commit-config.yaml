@@ -1,0 +1,47 @@
+# One-time setup: pip install pre-commit && pre-commit install
+#
+# Fast, laptop-side checks only -- see .github/workflows/validate.yml for
+# the heavier check_config-equivalent validation that runs in CI instead.
+repos:
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: ["-c=.yamllint.yaml"]
+
+  - repo: local
+    hooks:
+      - id: ha-yaml-syntax
+        name: HA-tag-aware YAML syntax check
+        description: >-
+          Parses changed YAML with constructors registered for HA's custom
+          tags (!secret, !include, !input, ...) so real syntax errors are
+          caught without choking on tags plain yaml.safe_load doesn't know.
+        entry: python3 scripts/hooks/check_yaml_syntax.py
+        language: python
+        additional_dependencies: ["pyyaml"]
+        files: \.ya?ml$
+
+      - id: ha-secrets-drift
+        name: secrets.yaml.example drift check
+        description: >-
+          Fails if a changed file references !secret <key> and that key
+          isn't documented in secrets.yaml.example (used by CI and local
+          esphome config checks in place of the real, gitignored
+          secrets.yaml).
+        entry: python3 scripts/hooks/check_secrets_drift.py
+        language: python
+        additional_dependencies: ["pyyaml"]
+        files: \.ya?ml$
+
+      - id: esphome-config
+        name: ESPHome config validation
+        description: >-
+          Runs `esphome config` on changed esphome/*.yaml files. Doesn't
+          need real hardware -- only needs !secret values to resolve, so
+          it uses the same secrets.yaml.example-derived secrets.yaml as CI.
+        entry: bash -c 'cp -n secrets.yaml.example esphome/secrets.yaml 2>/dev/null; for f in "$@"; do esphome config "$f" || exit 1; done' --
+        language: python
+        additional_dependencies: ["esphome"]
+        files: ^esphome/.*\.ya?ml$
+        exclude: ^esphome/archive/

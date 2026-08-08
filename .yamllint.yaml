@@ -1,0 +1,49 @@
+---
+# yamllint config tuned for Home Assistant YAML.
+# https://yamllint.readthedocs.io/en/stable/configuration.html
+
+extends: default
+
+rules:
+  # HA config files don't use the `---` document-start marker.
+  document-start: disable
+
+  # Jinja2 templates routinely produce very long single lines; line-length
+  # isn't a useful signal in this repo.
+  line-length: disable
+
+  # Keep the default truthy check (flags bare on/off/yes/no/true/false and
+  # requires them quoted) — this is HA's own documented convention for
+  # state literals like 'on'/'off', so leave it at its default (enabled).
+  truthy:
+    check-keys: false
+
+  # This repo mixes UI-generated YAML (list items under a key at the same
+  # indent as the key, i.e. 0 extra spaces before "-") with hand-written
+  # YAML (list items indented 2 extra spaces past their key). Both are
+  # valid YAML and HA doesn't care; `whatever` accepts either style
+  # consistently within a given block instead of forcing a repo-wide
+  # rewrite of every UI-authored automation.
+  indentation:
+    spaces: consistent
+    indent-sequences: whatever
+
+  # The existing repo has scattered trailing whitespace, stray blank
+  # lines, and a missing final newline in one file — pre-existing style
+  # noise, not something this tooling change should force-fix as a side
+  # effect (a future style-normalization pass, tracked separately, is
+  # the right place to clean these up). Disabled so CI reflects new
+  # regressions going forward rather than failing on day one.
+  trailing-spaces: disable
+  empty-lines: disable
+  new-line-at-end-of-file: disable
+
+  # Decorative banner comments (e.g. "# ===...===") are used throughout
+  # packages/*.yaml for section headers; don't flag their spacing/indent.
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+
+  # HA's own YAML style (see CLAUDE.md) doesn't enforce a single quote
+  # style repo-wide; don't fight that here.
+  quoted-strings: disable
