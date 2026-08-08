@@ -24,10 +24,6 @@ automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml
 
-http:
-  ssl_certificate: /ssl/etc/letsencrypt/live/home.daleggetts.com/fullchain.pem
-  ssl_key: /ssl/etc/letsencrypt/live/home.daleggetts.com/privkey.pem
-
 # Standard HomeKit Bridge
 homekit: !include homekit.yaml
 
