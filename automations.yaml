@@ -830,3 +830,31 @@
     target:
       entity_id: light.living_room_lights
   mode: single
+- id: '1785541874413'
+  alias: Turn on Grow Tent Lights Outlet
+  description: ''
+  triggers:
+  - trigger: time
+    at: 06:00:00
+  conditions: []
+  actions:
+  - action: switch.turn_on
+    metadata: {}
+    target:
+      entity_id: switch.grow_tent_outlet
+    data: {}
+  mode: single
+- id: '1785541949308'
+  alias: Turn off Grow Tent Lights Outlet
+  description: ''
+  triggers:
+  - trigger: time
+    at: '18:00:00'
+  conditions: []
+  actions:
+  - action: switch.turn_off
+    metadata: {}
+    target:
+      entity_id: switch.grow_tent_outlet
+    data: {}
+  mode: single
