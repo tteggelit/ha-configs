@@ -1,0 +1,37 @@
+automation:
+  - id: '1704080363630'
+    alias: Turn On Master Closet Light
+    description: Turn on master closet light when motion is detected
+    triggers:
+    - trigger: state
+      entity_id:
+      - binary_sensor.master_closet_light_motion_detection
+      to: 'on'
+    conditions: []
+    actions:
+    - action: switch.turn_on
+      metadata: {}
+      data: {}
+      target:
+        entity_id: switch.master_closet_light
+    mode: single
+  - id: '1704080533451'
+    alias: Turn Off Master Closet Light
+    description: Turn off master closet light when motion is no longer detected
+    triggers:
+    - entity_id:
+      - binary_sensor.master_closet_light_motion_detection
+      to: 'off'
+      for:
+        hours: 0
+        minutes: 0
+        seconds: 30
+      trigger: state
+    conditions: []
+    actions:
+    - target:
+        entity_id:
+        - switch.master_closet_light
+      data: {}
+      action: switch.turn_off
+    mode: single

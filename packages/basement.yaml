@@ -1,0 +1,27 @@
+# Non-lighting basement automations (lighting lives in basement_lighting.yaml).
+automation:
+  - id: '1703648655388'
+    alias: Basement Freezer Open Notification
+    description: Notify if the freezer is left open for more than 2 minutes
+    triggers:
+    - entity_id:
+      - binary_sensor.basement_freezer_door_motion_sensor_contact
+      to:
+      - 'on'
+      for:
+        hours: 0
+        minutes: 2
+        seconds: 0
+      trigger: state
+    conditions: []
+    actions:
+    - data:
+        message: Basement freezer left open
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1
+      action: notify.mobile_app_tis_iphone
+    mode: single

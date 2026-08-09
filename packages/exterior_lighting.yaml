@@ -1,0 +1,60 @@
+automation:
+  - id: '1704080588094'
+    alias: Carriage Lights - Turn On
+    description: Turn on carriage lights at sunset
+    triggers:
+    - trigger: sun
+      event: sunset
+      offset: 0
+    conditions: []
+    actions:
+    - action: switch.turn_on
+      metadata: {}
+      data: {}
+      target:
+        entity_id: switch.carriage_lights
+    mode: single
+  - id: '1704080632778'
+    alias: Carriage Lights - Turn Off
+    description: Turn off carriage lights at sunrise
+    triggers:
+    - trigger: sun
+      event: sunrise
+      offset: 0
+    conditions: []
+    actions:
+    - action: switch.turn_off
+      target:
+        entity_id:
+        - switch.carriage_lights
+      data: {}
+    mode: single
+  - id: '1704152978232'
+    alias: Deck Lights - Turn On
+    description: Turn on the deck lights at sunset
+    triggers:
+    - trigger: sun
+      event: sunset
+      offset: 0
+    conditions: []
+    actions:
+    - action: switch.turn_on
+      metadata: {}
+      data: {}
+      target:
+        entity_id: switch.deck_lights
+    mode: single
+  - id: '1704153027046'
+    alias: Deck Lights - Turn Off
+    description: Turn off the deck lights at 10:30
+    triggers:
+    - trigger: time
+      at: '22:30:00'
+    conditions: []
+    actions:
+    - action: switch.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id: switch.deck_lights
+    mode: single

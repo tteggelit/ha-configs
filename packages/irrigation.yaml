@@ -1248,6 +1248,48 @@ script:
           datetime: "1970-01-01 00:00:00"
     mode: single
 
+  # ===========================================================================
+  # ZONE WATERING SCRIPTS (Cycle & Soak blueprint)
+  #
+  # Keyed to match the live entity_id (script.back_vegetable_garden_irrigation,
+  # script.side_vegetable_garden_irrigation, script.front_garden_irrigation)
+  # referenced throughout this package. These entity_ids were set via a UI
+  # rename at some point; classic (no unique_id) scripts.yaml-style scripts
+  # use their YAML key as their actual identity, so the key has to match the
+  # live entity_id exactly for this file to correctly describe what's
+  # actually running -- the same "entity_id can diverge from what you'd
+  # expect" pattern this repo already documents elsewhere (e.g. the Met.no
+  # forecast cache sensor).
+  # ===========================================================================
+
+  back_vegetable_garden_irrigation:
+    alias: Back Vegetable Garden Irrigation
+    use_blueprint:
+      path: cycle_soak_watering.yaml
+      input:
+        valve_entity: valve.back_vegetable_garden_timer_zone
+        zone_name: Back Vegetable Garden
+        notify_on_completion: true
+
+  side_vegetable_garden_irrigation:
+    alias: Side Vegetable Garden Irrigation
+    use_blueprint:
+      path: cycle_soak_watering.yaml
+      input:
+        valve_entity: valve.vegetable_garden_timer_vegetable_garden_zone
+        zone_name: Side Vegetable Garden
+        notify_on_completion: true
+
+  front_garden_irrigation:
+    alias: Front Garden Irrigation
+    use_blueprint:
+      path: cycle_soak_watering.yaml
+      input:
+        valve_entity: switch.front_garden_faucet_valve
+        zone_name: Front Garden Irrigation
+        timer_type: standard
+        notify_on_completion: true
+
 
 # =============================================================================
 # AUTOMATIONS

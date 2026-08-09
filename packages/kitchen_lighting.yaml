@@ -1,0 +1,221 @@
+scene:
+  - id: '1703857920026'
+    name: Normal Cabinet Lights
+    entities:
+      light.kitchen_cabinet_lights_left:
+        min_color_temp_kelvin: 1501
+        max_color_temp_kelvin: 8000
+        effect_list:
+        - blink
+        - breathe
+        - okay
+        - channel_change
+        - finish_effect
+        - stop_effect
+        - colorloop
+        - stop_colorloop
+        supported_color_modes:
+        - color_temp
+        - xy
+        effect:
+        color_mode: xy
+        brightness: 64
+        color_temp_kelvin:
+        hs_color:
+        - 308.125
+        - 37.647
+        rgb_color:
+        - 255
+        - 159
+        - 242
+        xy_color:
+        - 0.371
+        - 0.239
+        friendly_name: Kitchen Cabinet Lights Left
+        supported_features: 44
+        state: 'on'
+      light.kitchen_cabinet_lights_right:
+        min_color_temp_kelvin: 1501
+        max_color_temp_kelvin: 8000
+        effect_list:
+        - blink
+        - breathe
+        - okay
+        - channel_change
+        - finish_effect
+        - stop_effect
+        - colorloop
+        - stop_colorloop
+        supported_color_modes:
+        - color_temp
+        - xy
+        effect:
+        color_mode: xy
+        brightness: 64
+        color_temp_kelvin:
+        hs_color:
+        - 308.125
+        - 37.647
+        rgb_color:
+        - 255
+        - 159
+        - 242
+        xy_color:
+        - 0.371
+        - 0.239
+        friendly_name: Kitchen Cabinet Lights Right
+        supported_features: 44
+        state: 'on'
+    icon: mdi:lightbulb-group
+    metadata: {}
+  - id: '1703857989383'
+    name: Cooking Lights
+    entities:
+      light.kitchen_cabinet_lights_left:
+        min_color_temp_kelvin: 1501
+        max_color_temp_kelvin: 8000
+        effect_list:
+        - blink
+        - breathe
+        - okay
+        - channel_change
+        - finish_effect
+        - stop_effect
+        - colorloop
+        - stop_colorloop
+        supported_color_modes:
+        - color_temp
+        - xy
+        effect:
+        color_mode: color_temp
+        brightness: 255
+        color_temp_kelvin: 3676
+        hs_color:
+        - 27.015
+        - 41.078
+        rgb_color:
+        - 255
+        - 197
+        - 150
+        xy_color:
+        - 0.441
+        - 0.37
+        friendly_name: Kitchen Cabinet Lights Left
+        supported_features: 44
+        state: 'on'
+      light.kitchen_cabinet_lights_right:
+        min_color_temp_kelvin: 1501
+        max_color_temp_kelvin: 8000
+        effect_list:
+        - blink
+        - breathe
+        - okay
+        - channel_change
+        - finish_effect
+        - stop_effect
+        - colorloop
+        - stop_colorloop
+        supported_color_modes:
+        - color_temp
+        - xy
+        effect:
+        color_mode: color_temp
+        brightness: 255
+        color_temp_kelvin: 3676
+        hs_color:
+        - 27.015
+        - 41.078
+        rgb_color:
+        - 255
+        - 197
+        - 150
+        xy_color:
+        - 0.441
+        - 0.37
+        friendly_name: Kitchen Cabinet Lights Right
+        supported_features: 44
+        state: 'on'
+    icon: mdi:lightbulb-group
+    metadata: {}
+
+automation:
+  - id: '1703714762428'
+    alias: Turn On Kitchen Cabinet Lights (Evening)
+    description: Turn on kitchen cabinet lights 45 minutes before sunset
+    triggers:
+    - event: sunset
+      offset: -00:45:00
+      trigger: sun
+    conditions: []
+    actions:
+    - target:
+        entity_id: scene.normal_cabinet_lights
+      metadata: {}
+      action: scene.turn_on
+      data: {}
+    - action: switch.turn_on
+      metadata: {}
+      data: {}
+      target:
+        entity_id:
+        - switch.living_room_side_lights_outlet
+    mode: single
+  - id: '1703715453766'
+    alias: Turn Off Kitchen Cabinet Lights
+    description: Turn off kitchen cabinet lights
+    triggers:
+    - at: 01:00:00
+      trigger: time
+    - event: sunrise
+      offset: 00:30:00
+      trigger: sun
+    conditions: []
+    actions:
+    - metadata: {}
+      data: {}
+      target:
+        entity_id:
+        - light.kitchen_cabinet_lights_left
+        - light.kitchen_cabinet_lights_right
+      action: light.turn_off
+    mode: single
+  - id: '1704080218841'
+    alias: Turn On Pantry Light
+    description: Turn on pantry light when motion detected
+    triggers:
+    - entity_id:
+      - binary_sensor.pantry_motion_sensor_occupancy
+      to:
+      - 'on'
+      trigger: state
+      from:
+      - 'off'
+    conditions: []
+    actions:
+    - metadata: {}
+      data: {}
+      target:
+        entity_id: switch.pantry_light
+      action: switch.turn_on
+    mode: single
+  - id: '1704080276347'
+    alias: Turn Off Pantry Light
+    description: Turn off pantry light when motion is no longer detected
+    triggers:
+    - entity_id:
+      - binary_sensor.pantry_motion_sensor_occupancy
+      to:
+      - 'off'
+      for:
+        hours: 0
+        minutes: 0
+        seconds: 30
+      trigger: state
+    conditions: []
+    actions:
+    - metadata: {}
+      data: {}
+      target:
+        entity_id: switch.pantry_light
+      action: switch.turn_off
+    mode: single

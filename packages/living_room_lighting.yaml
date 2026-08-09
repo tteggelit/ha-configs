@@ -1,0 +1,22 @@
+automation:
+  - id: '1736628413798'
+    alias: Turn Off Living Room Lights
+    description: Turn off living room lights after sunrise
+    triggers:
+    - event: sunrise
+      offset: 00:30:00
+      trigger: sun
+    conditions: []
+    actions:
+    - action: switch.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id:
+        - switch.living_room_side_lights_outlet
+    - action: light.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id: light.living_room_lights
+    mode: single

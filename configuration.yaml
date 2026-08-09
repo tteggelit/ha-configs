@@ -21,14 +21,9 @@ frontend:
     - /hacsfiles/lovelace-card-mod/card-mod.js?hacstag=190927524421
 
 automation: !include automations.yaml
-script: !include scripts.yaml
-scene: !include scenes.yaml
 
 # Standard HomeKit Bridge
 homekit: !include homekit.yaml
-
-# Templates
-template: !include templates.yaml
 
 influxdb:
   component_config: 

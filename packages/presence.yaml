@@ -1,0 +1,35 @@
+automation:
+  - id: '1704753058492'
+    alias: Amy and Ti Left Home
+    description: Take some actions when both Amy and Ti aren't home
+    triggers:
+    - trigger: device
+      device_id: c649c07764020e9d99e38656cf640e62
+      domain: device_tracker
+      entity_id: 5965ecf66909f3a0f926b23f8d4cef8b
+      type: leaves
+      zone: zone.home
+    - trigger: device
+      device_id: ba46bf63c37c0f5c0e4c054b5d7286c7
+      domain: device_tracker
+      entity_id: 82547043c87592e35391f94b52bc7d8c
+      type: leaves
+      zone: zone.home
+    conditions:
+    - condition: and
+      conditions:
+      - condition: device
+        device_id: c649c07764020e9d99e38656cf640e62
+        domain: device_tracker
+        entity_id: 5965ecf66909f3a0f926b23f8d4cef8b
+        type: is_not_home
+      - condition: device
+        device_id: ba46bf63c37c0f5c0e4c054b5d7286c7
+        domain: device_tracker
+        entity_id: 82547043c87592e35391f94b52bc7d8c
+        type: is_not_home
+    actions:
+    - action: notify.mobile_app_tis_iphone
+      data:
+        message: Amy and Ti left home
+    mode: single

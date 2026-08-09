@@ -440,6 +440,107 @@ automation:
             Safe humidity: {{ states('sensor.humidity_controller_safe_humidity_level') }}%
             Rate limited: {{ state_attr('sensor.humidity_controller_target_humidity_level', 'rate_limited') }}
 
+  - id: '1714824591977'
+    alias: Turn On HVAC Fan to Recirculate Air
+    description: ''
+    triggers:
+    - entity_id:
+      - sensor.guest_bedroom_temperature
+      above: sensor.current_thermostat_setpoint
+      for:
+        hours: 0
+        minutes: 5
+        seconds: 0
+      trigger: numeric_state
+    - entity_id:
+      - sensor.master_bedroom_temperature
+      above: sensor.current_thermostat_setpoint
+      for:
+        hours: 0
+        minutes: 5
+        seconds: 0
+      trigger: numeric_state
+    - entity_id:
+      - sensor.daylans_bedroom_temperature
+      above: sensor.current_thermostat_setpoint
+      for:
+        hours: 0
+        minutes: 5
+        seconds: 0
+      trigger: numeric_state
+    - entity_id:
+      - alarm_control_panel.abode_alarm
+      to: armed_away
+      for:
+        hours: 0
+        minutes: 45
+        seconds: 0
+      trigger: state
+      enabled: true
+    conditions:
+    - condition: and
+      conditions:
+      - condition: state
+        entity_id: climate.thermostat_2
+        attribute: hvac_action
+        state:
+        - idle
+      - condition: state
+        entity_id: sensor.current_thermostat_fan_state
+        state: 'off'
+        for:
+          hours: 0
+          minutes: 30
+          seconds: 0
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: climate.thermostat_2
+          enabled: true
+          state:
+          - cool
+        - condition: state
+          entity_id: climate.thermostat_2
+          state:
+          - heat_cool
+    actions:
+    - data:
+        fan_mode: 'on'
+      action: climate.set_fan_mode
+      target:
+        entity_id: climate.thermostat_2
+    mode: single
+
+  - id: '1715649661226'
+    alias: Turn Off HVAC Fan Recirculation
+    description: Sets the thermostat's fan mode back to auto after 15 minutes of the
+      fan running
+    triggers:
+    - entity_id:
+      - climate.thermostat_2
+      attribute: fan_mode
+      to:
+      - 'on'
+      for:
+        hours: 0
+        minutes: 30
+        seconds: 0
+      trigger: state
+    - entity_id:
+      - climate.thermostat_2
+      attribute: hvac_action
+      to:
+      - cooling
+      trigger: state
+    conditions: []
+    actions:
+    - data:
+        fan_mode: auto
+      action: climate.set_fan_mode
+      target:
+        entity_id: climate.thermostat_2
+    mode: single
+
 # Template sensors
 template:
   - sensor:
@@ -616,6 +717,22 @@ template:
             {{ (safe_humidity + offset) > last_target }}
           applied_offset: >
             {{ states('input_number.humidity_controller_offset') }}
+
+      # Used by the HVAC fan recirculation automations above.
+      - name: "Current Thermostat Setpoint"
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state_class: measurement
+        state: >
+          {{ state_attr('climate.thermostat','temperature') }}
+
+      - name: "Current Thermostat Fan Mode"
+        state: >
+          {{ state_attr('climate.thermostat','fan_mode') }}
+
+      - name: "Current Thermostat Fan State"
+        state: >
+          {{ state_attr('climate.thermostat','fan') }}
 
 ###############################################################################
 # ============================================================================
