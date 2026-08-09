@@ -1008,38 +1008,32 @@ script:
               entity_id: script.front_garden_irrigation
     mode: single
 
-
-# =============================================================================
-# AUTOMATIONS
-#
-# Notification pattern used throughout:
-#   state_attr('sensor.irrigation_notify_targets_resolved', 'targets') returns
-#   a list of notify entity IDs based on the current input_select selection.
-#   repeat.for_each iterates this list, sending one notify.send_message per
-#   target. When "None" is selected the list is empty and no notifications fire.
-# =============================================================================
-
-automation:
-
   # ===========================================================================
-  # ZONE: Back Vegetable Garden — Evaluate and Water
-  # Triggers every 2 hours at :00. Watering window: 05:00–09:00.
+  # Shared by the three per-zone automations below (Back/Side/Front Garden).
+  # entity_prefix builds each zone's entity ids (e.g. "back_garden" ->
+  # sensor.back_garden_quorum, input_datetime.back_garden_last_watered).
   # ===========================================================================
 
-  - id: irrigation_back_garden_evaluate
-    alias: "Irrigation — Back Garden: Evaluate and Water"
-    description: >
-      Checks urgency score for the back vegetable garden and runs the
-      watering script with 3 cycles (urgency >= 2) or 2 cycles (urgency = 1).
-      When input_boolean.irrigation_debug is on, logs the result of every gate
-      condition and the watering decision to the HA log.
-    triggers:
-      - trigger: time_pattern
-        hours: "/2"
-        minutes: "0"
-    actions:
+  irrigation_evaluate_and_water_zone:
+    alias: "Irrigation — Evaluate and Water Zone"
+    description: >-
+      Checks urgency score for the given zone and runs its watering
+      script with 3 cycles (urgency >= 2) or 2 cycles (urgency = 1).
+      When input_boolean.irrigation_debug is on, logs the result of
+      every gate condition and the watering decision to the HA log.
+    fields:
+      zone_name:
+        description: Human-readable zone name, used in logging
+        example: Back Garden
+      entity_prefix:
+        description: Entity id prefix shared by this zone's sensors/helpers
+        example: back_garden
+      target_script:
+        description: The irrigation script to call for this zone
+        example: script.back_vegetable_garden_irrigation
+    sequence:
       - variables:
-          zone: "Back Garden"
+          zone: "{{ zone_name }}"
           in_season: >
             {{ now().date() >= as_datetime(states('input_datetime.irrigation_season_start')).date()
                and now().date() <= as_datetime(states('input_datetime.irrigation_season_end')).date() }}
@@ -1053,7 +1047,7 @@ automation:
           lock_free: >
             {{ is_state('input_boolean.irrigation_running', 'off') }}
           hours_since_watered: >
-            {% set last = states('input_datetime.back_garden_last_watered') %}
+            {% set last = states('input_datetime.' ~ entity_prefix ~ '_last_watered') %}
             {% if last in ['unknown','unavailable',''] %}999
             {% else %}{{ ((now() - last | as_datetime | as_local).total_seconds() / 3600) | round(1) }}{% endif %}
           not_watered_recently: >
@@ -1065,13 +1059,13 @@ automation:
           overdue: >
             {{ force_watering_enabled and hours_since_watered | float(999) > force_watering_hours }}
           quorum_ok: >
-            {{ is_state('sensor.back_garden_quorum', 'ok') }}
+            {{ is_state('sensor.' ~ entity_prefix ~ '_quorum', 'ok') }}
           urgency: >
-            {{ states('sensor.back_garden_irrigation_urgency') | int(0) }}
+            {{ states('sensor.' ~ entity_prefix ~ '_irrigation_urgency') | int(0) }}
           moisture_mean: >
-            {{ states('sensor.back_garden_moisture_mean') }}
+            {{ states('sensor.' ~ entity_prefix ~ '_moisture_mean') }}
           dryness_factor: >
-            {{ states('sensor.back_garden_dryness_factor') }}
+            {{ states('sensor.' ~ entity_prefix ~ '_dryness_factor') }}
           rain_factor: >
             {{ states('sensor.irrigation_rain_factor') }}
           nws_prob: >
@@ -1083,11 +1077,11 @@ automation:
           met_precip: >
             {{ state_attr('sensor.irrigation_rain_factor', 'met_precip_24h') }}
           last_watered: >
-            {{ states('input_datetime.back_garden_last_watered') }}
+            {{ states('input_datetime.' ~ entity_prefix ~ '_last_watered') }}
           valid_sensors: >
-            {{ state_attr('sensor.back_garden_quorum', 'valid_sensors') }}
+            {{ state_attr('sensor.' ~ entity_prefix ~ '_quorum', 'valid_sensors') }}
           total_sensors: >
-            {{ state_attr('sensor.back_garden_quorum', 'total_sensors') }}
+            {{ state_attr('sensor.' ~ entity_prefix ~ '_quorum', 'total_sensors') }}
           season_start: >
             {{ states('input_datetime.irrigation_season_start') }}
           season_end: >
@@ -1155,7 +1149,7 @@ automation:
                     last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
                     full 3-cycle run.
                   level: warning
-              - action: script.back_vegetable_garden_irrigation
+              - action: "{{ target_script }}"
                 data: {}
           # Normal path — urgency >= 2: full run
           - conditions:
@@ -1168,7 +1162,7 @@ automation:
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     full 3-cycle run.
                   level: warning
-              - action: script.back_vegetable_garden_irrigation
+              - action: "{{ target_script }}"
                 data: {}
           # Normal path — urgency == 1: reduced run
           - conditions:
@@ -1181,9 +1175,114 @@ automation:
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     reduced 2-cycle run.
                   level: info
-              - action: script.back_vegetable_garden_irrigation
+              - action: "{{ target_script }}"
                 data:
                   num_cycles: 2
+    mode: single
+
+  irrigation_record_last_watered:
+    alias: "Irrigation — Record Last Watered"
+    description: >-
+      Shared by the three per-zone "Record Last Watered" automations.
+    fields:
+      entity_prefix:
+        description: Entity id prefix for this zone's last-watered helper
+        example: back_garden
+    sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: "input_datetime.{{ entity_prefix }}_last_watered"
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    mode: single
+
+  irrigation_scheduled_run_zone:
+    alias: "Irrigation — Scheduled Run Zone"
+    description: >-
+      Shared by the three per-zone "Scheduled Run" automations. Fires
+      the zone's irrigation script (unless another zone is already
+      running), then clears the zone's scheduled-run helper. Bypasses
+      seasonal, weather, and moisture gate conditions -- a scheduled
+      run is an intentional override; the global run lock is still
+      respected.
+    fields:
+      zone_name:
+        description: Human-readable zone name, used in logging
+        example: Back Garden
+      entity_prefix:
+        description: Entity id prefix shared by this zone's helpers
+        example: back_garden
+      target_script:
+        description: The irrigation script to call for this zone
+        example: script.back_vegetable_garden_irrigation
+    sequence:
+      - condition: template
+        value_template: >
+          {{ states('input_datetime.' ~ entity_prefix ~ '_scheduled_run') not in
+             ['unknown','unavailable','']
+             and as_datetime(states('input_datetime.' ~ entity_prefix ~ '_scheduled_run'))
+                | as_local > (now() - timedelta(minutes=1)) }}
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.irrigation_running
+                state: "on"
+            sequence:
+              - action: system_log.write
+                data:
+                  message: >
+                    Scheduled run: {{ zone_name }} skipped — another zone is
+                    already running. Reschedule if needed.
+                  level: warning
+        default:
+          - action: system_log.write
+            data:
+              message: "Scheduled run: {{ zone_name }} starting."
+              level: info
+          - action: "{{ target_script }}"
+            data: {}
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: "input_datetime.{{ entity_prefix }}_scheduled_run"
+        data:
+          datetime: "1970-01-01 00:00:00"
+    mode: single
+
+
+# =============================================================================
+# AUTOMATIONS
+#
+# Notification pattern used throughout:
+#   state_attr('sensor.irrigation_notify_targets_resolved', 'targets') returns
+#   a list of notify entity IDs based on the current input_select selection.
+#   repeat.for_each iterates this list, sending one notify.send_message per
+#   target. When "None" is selected the list is empty and no notifications fire.
+# =============================================================================
+
+automation:
+
+  # ===========================================================================
+  # ZONE: Back Vegetable Garden — Evaluate and Water
+  # Triggers every 2 hours at :00. Watering window: 05:00–09:00.
+  # ===========================================================================
+
+  - id: irrigation_back_garden_evaluate
+    alias: "Irrigation — Back Garden: Evaluate and Water"
+    description: >
+      Checks urgency score for the back vegetable garden and runs the
+      watering script with 3 cycles (urgency >= 2) or 2 cycles (urgency = 1).
+      When input_boolean.irrigation_debug is on, logs the result of every gate
+      condition and the watering decision to the HA log.
+    triggers:
+      - trigger: time_pattern
+        hours: "/2"
+        minutes: "0"
+    actions:
+      - action: script.irrigation_evaluate_and_water_zone
+        data:
+          zone_name: Back Garden
+          entity_prefix: back_garden
+          target_script: script.back_vegetable_garden_irrigation
     mode: single
 
   # ===========================================================================
@@ -1203,149 +1302,11 @@ automation:
         hours: "/2"
         minutes: "30"
     actions:
-      - variables:
-          zone: "Side Garden"
-          in_season: >
-            {{ now().date() >= as_datetime(states('input_datetime.irrigation_season_start')).date()
-               and now().date() <= as_datetime(states('input_datetime.irrigation_season_end')).date() }}
-          in_window: >
-            {{ now().hour >= 5 and now().hour < 9 }}
-          not_paused: >
-            {{ states('input_number.irrigation_pause_days') | int(0) == 0
-               or now() >= states('input_datetime.irrigation_pause_until') | as_datetime | as_local }}
-          no_rain_delay: >
-            {{ is_state('input_boolean.rain_delay_active', 'off') }}
-          lock_free: >
-            {{ is_state('input_boolean.irrigation_running', 'off') }}
-          hours_since_watered: >
-            {% set last = states('input_datetime.side_garden_last_watered') %}
-            {% if last in ['unknown','unavailable',''] %}999
-            {% else %}{{ ((now() - last | as_datetime | as_local).total_seconds() / 3600) | round(1) }}{% endif %}
-          not_watered_recently: >
-            {{ hours_since_watered | float(999) > 24 }}
-          force_watering_enabled: >
-            {{ is_state('input_boolean.irrigation_force_watering_enabled', 'on') }}
-          force_watering_hours: >
-            {{ (states('input_number.irrigation_force_watering_days') | float(2)) * 24 }}
-          overdue: >
-            {{ force_watering_enabled and hours_since_watered | float(999) > force_watering_hours }}
-          quorum_ok: >
-            {{ is_state('sensor.side_garden_quorum', 'ok') }}
-          urgency: >
-            {{ states('sensor.side_garden_irrigation_urgency') | int(0) }}
-          moisture_mean: >
-            {{ states('sensor.side_garden_moisture_mean') }}
-          dryness_factor: >
-            {{ states('sensor.side_garden_dryness_factor') }}
-          rain_factor: >
-            {{ states('sensor.irrigation_rain_factor') }}
-          nws_prob: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'nws_prob_24h') }}
-          nws_precip: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'nws_precip_24h') }}
-          met_prob: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'met_prob_24h') }}
-          met_precip: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'met_precip_24h') }}
-          last_watered: >
-            {{ states('input_datetime.side_garden_last_watered') }}
-          valid_sensors: >
-            {{ state_attr('sensor.side_garden_quorum', 'valid_sensors') }}
-          total_sensors: >
-            {{ state_attr('sensor.side_garden_quorum', 'total_sensors') }}
-          season_start: >
-            {{ states('input_datetime.irrigation_season_start') }}
-          season_end: >
-            {{ states('input_datetime.irrigation_season_end') }}
-          pause_days: >
-            {{ states('input_number.irrigation_pause_days') | int(0) }}
-
-      - if:
-          - condition: state
-            entity_id: input_boolean.irrigation_debug
-            state: "on"
-        then:
-          - action: logbook.log
-            data:
-              name: "Irrigation Debug"
-              message: >
-                {{ zone }} evaluated at {{ now().strftime('%H:%M') }}.
-                Season {{ season_start }}→{{ season_end }}: {{ in_season }}.
-                Window(05-09h): {{ in_window }}.
-                Paused({{ pause_days }}d): {{ not not_paused }}.
-                Rain delay: {{ not no_rain_delay }}.
-                Lock held: {{ not lock_free }}.
-                Watered recently: {{ not not_watered_recently }} (last: {{ last_watered }}).
-                Quorum {{ valid_sensors }}/{{ total_sensors }}: {{ quorum_ok }}.
-                Moisture: {{ moisture_mean }}% | Dryness: {{ dryness_factor }}.
-                NWS: {{ nws_prob }}%/{{ nws_precip }}" Met: {{ met_prob }}%/{{ met_precip }}".
-                Rain factor: {{ rain_factor }} | Urgency: {{ urgency }}.
-                GATE RESULT: {{ 'PASS-normal' if (in_season and in_window and not_paused and no_rain_delay and lock_free and not_watered_recently and quorum_ok and urgency >= 1) else 'PASS-overdue' if (in_season and in_window and not_paused and no_rain_delay and lock_free and quorum_ok and overdue and rain_factor | int(0) < 2) else 'BLOCK' }}.
-                Hours since watered: {{ hours_since_watered }}h | Force watering enabled: {{ force_watering_enabled }} (threshold {{ force_watering_hours }}h) | Overdue: {{ overdue }}.
-              entity_id: input_boolean.irrigation_debug
-
-      - condition: template
-        value_template: >
-          {{ in_season and in_window and not_paused and no_rain_delay
-             and lock_free and quorum_ok
-             and ((not_watered_recently and urgency >= 1)
-                  or (overdue and rain_factor | int(0) < 2)) }}
-
-      - if:
-          - condition: state
-            entity_id: input_boolean.irrigation_debug
-            state: "on"
-        then:
-          - action: logbook.log
-            data:
-              name: "Irrigation Debug"
-              message: >
-                {{ zone }}: gates PASSED. Urgency={{ urgency }}.
-                Decision: {{ 'FULL 3-cycle (overdue)' if (overdue and urgency < 1) else 'FULL 3-cycle' if urgency >= 2 else 'REDUCED 2-cycle' }}.
-              entity_id: input_boolean.irrigation_debug
-
-      - choose:
-          # Overdue (force-watering interval exceeded, if enabled) and no strong rain forecast
-          - conditions:
-              - condition: template
-                value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
-                    last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
-                    full 3-cycle run.
-                  level: warning
-              - action: script.side_vegetable_garden_irrigation
-                data: {}
-          # Normal path — urgency >= 2: full run
-          - conditions:
-              - condition: template
-                value_template: "{{ urgency >= 2 }}"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Irrigation: {{ zone }} urgency {{ urgency }} —
-                    full 3-cycle run.
-                  level: warning
-              - action: script.side_vegetable_garden_irrigation
-                data: {}
-          # Normal path — urgency == 1: reduced run
-          - conditions:
-              - condition: template
-                value_template: "{{ urgency == 1 }}"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Irrigation: {{ zone }} urgency {{ urgency }} —
-                    reduced 2-cycle run.
-                  level: info
-              - action: script.side_vegetable_garden_irrigation
-                data:
-                  num_cycles: 2
+      - action: script.irrigation_evaluate_and_water_zone
+        data:
+          zone_name: Side Garden
+          entity_prefix: side_garden
+          target_script: script.side_vegetable_garden_irrigation
     mode: single
 
   # ===========================================================================
@@ -1365,149 +1326,11 @@ automation:
         hours: "/2"
         minutes: "15"
     actions:
-      - variables:
-          zone: "Front Garden"
-          in_season: >
-            {{ now().date() >= as_datetime(states('input_datetime.irrigation_season_start')).date()
-               and now().date() <= as_datetime(states('input_datetime.irrigation_season_end')).date() }}
-          in_window: >
-            {{ now().hour >= 5 and now().hour < 9 }}
-          not_paused: >
-            {{ states('input_number.irrigation_pause_days') | int(0) == 0
-               or now() >= states('input_datetime.irrigation_pause_until') | as_datetime | as_local }}
-          no_rain_delay: >
-            {{ is_state('input_boolean.rain_delay_active', 'off') }}
-          lock_free: >
-            {{ is_state('input_boolean.irrigation_running', 'off') }}
-          hours_since_watered: >
-            {% set last = states('input_datetime.front_garden_last_watered') %}
-            {% if last in ['unknown','unavailable',''] %}999
-            {% else %}{{ ((now() - last | as_datetime | as_local).total_seconds() / 3600) | round(1) }}{% endif %}
-          not_watered_recently: >
-            {{ hours_since_watered | float(999) > 24 }}
-          force_watering_enabled: >
-            {{ is_state('input_boolean.irrigation_force_watering_enabled', 'on') }}
-          force_watering_hours: >
-            {{ (states('input_number.irrigation_force_watering_days') | float(2)) * 24 }}
-          overdue: >
-            {{ force_watering_enabled and hours_since_watered | float(999) > force_watering_hours }}
-          quorum_ok: >
-            {{ is_state('sensor.front_garden_quorum', 'ok') }}
-          urgency: >
-            {{ states('sensor.front_garden_irrigation_urgency') | int(0) }}
-          moisture_mean: >
-            {{ states('sensor.front_garden_moisture_mean') }}
-          dryness_factor: >
-            {{ states('sensor.front_garden_dryness_factor') }}
-          rain_factor: >
-            {{ states('sensor.irrigation_rain_factor') }}
-          nws_prob: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'nws_prob_24h') }}
-          nws_precip: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'nws_precip_24h') }}
-          met_prob: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'met_prob_24h') }}
-          met_precip: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'met_precip_24h') }}
-          last_watered: >
-            {{ states('input_datetime.front_garden_last_watered') }}
-          valid_sensors: >
-            {{ state_attr('sensor.front_garden_quorum', 'valid_sensors') }}
-          total_sensors: >
-            {{ state_attr('sensor.front_garden_quorum', 'total_sensors') }}
-          season_start: >
-            {{ states('input_datetime.irrigation_season_start') }}
-          season_end: >
-            {{ states('input_datetime.irrigation_season_end') }}
-          pause_days: >
-            {{ states('input_number.irrigation_pause_days') | int(0) }}
-
-      - if:
-          - condition: state
-            entity_id: input_boolean.irrigation_debug
-            state: "on"
-        then:
-          - action: logbook.log
-            data:
-              name: "Irrigation Debug"
-              message: >
-                {{ zone }} evaluated at {{ now().strftime('%H:%M') }}.
-                Season {{ season_start }}→{{ season_end }}: {{ in_season }}.
-                Window(05-09h): {{ in_window }}.
-                Paused({{ pause_days }}d): {{ not not_paused }}.
-                Rain delay: {{ not no_rain_delay }}.
-                Lock held: {{ not lock_free }}.
-                Watered recently: {{ not not_watered_recently }} (last: {{ last_watered }}).
-                Quorum {{ valid_sensors }}/{{ total_sensors }}: {{ quorum_ok }}.
-                Moisture: {{ moisture_mean }}% | Dryness: {{ dryness_factor }}.
-                NWS: {{ nws_prob }}%/{{ nws_precip }}" Met: {{ met_prob }}%/{{ met_precip }}".
-                Rain factor: {{ rain_factor }} | Urgency: {{ urgency }}.
-                GATE RESULT: {{ 'PASS-normal' if (in_season and in_window and not_paused and no_rain_delay and lock_free and not_watered_recently and quorum_ok and urgency >= 1) else 'PASS-overdue' if (in_season and in_window and not_paused and no_rain_delay and lock_free and quorum_ok and overdue and rain_factor | int(0) < 2) else 'BLOCK' }}.
-                Hours since watered: {{ hours_since_watered }}h | Force watering enabled: {{ force_watering_enabled }} (threshold {{ force_watering_hours }}h) | Overdue: {{ overdue }}.
-              entity_id: input_boolean.irrigation_debug
-
-      - condition: template
-        value_template: >
-          {{ in_season and in_window and not_paused and no_rain_delay
-             and lock_free and quorum_ok
-             and ((not_watered_recently and urgency >= 1)
-                  or (overdue and rain_factor | int(0) < 2)) }}
-
-      - if:
-          - condition: state
-            entity_id: input_boolean.irrigation_debug
-            state: "on"
-        then:
-          - action: logbook.log
-            data:
-              name: "Irrigation Debug"
-              message: >
-                {{ zone }}: gates PASSED. Urgency={{ urgency }}.
-                Decision: {{ 'FULL 3-cycle (overdue)' if (overdue and urgency < 1) else 'FULL 3-cycle' if urgency >= 2 else 'REDUCED 2-cycle' }}.
-              entity_id: input_boolean.irrigation_debug
-
-      - choose:
-          # Overdue (force-watering interval exceeded, if enabled) and no strong rain forecast
-          - conditions:
-              - condition: template
-                value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
-                    last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
-                    full 3-cycle run.
-                  level: warning
-              - action: script.front_garden_irrigation
-                data: {}
-          # Normal path — urgency >= 2: full run
-          - conditions:
-              - condition: template
-                value_template: "{{ urgency >= 2 }}"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Irrigation: {{ zone }} urgency {{ urgency }} —
-                    full 3-cycle run.
-                  level: warning
-              - action: script.front_garden_irrigation
-                data: {}
-          # Normal path — urgency == 1: reduced run
-          - conditions:
-              - condition: template
-                value_template: "{{ urgency == 1 }}"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Irrigation: {{ zone }} urgency {{ urgency }} —
-                    reduced 2-cycle run.
-                  level: info
-              - action: script.front_garden_irrigation
-                data:
-                  num_cycles: 2
+      - action: script.irrigation_evaluate_and_water_zone
+        data:
+          zone_name: Front Garden
+          entity_prefix: front_garden
+          target_script: script.front_garden_irrigation
     mode: single
 
   # ===========================================================================
@@ -1522,11 +1345,9 @@ automation:
         from: "on"
         to: "off"
     actions:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.back_garden_last_watered
+      - action: script.irrigation_record_last_watered
         data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          entity_prefix: back_garden
     mode: single
 
   - id: irrigation_update_side_garden_last_watered
@@ -1537,11 +1358,9 @@ automation:
         from: "on"
         to: "off"
     actions:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.side_garden_last_watered
+      - action: script.irrigation_record_last_watered
         data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          entity_prefix: side_garden
     mode: single
 
   - id: irrigation_update_front_garden_last_watered
@@ -1552,11 +1371,9 @@ automation:
         from: "on"
         to: "off"
     actions:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.front_garden_last_watered
+      - action: script.irrigation_record_last_watered
         data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          entity_prefix: front_garden
     mode: single
 
   # ===========================================================================
@@ -1738,38 +1555,12 @@ automation:
     triggers:
       - trigger: time
         at: input_datetime.back_garden_scheduled_run
-    conditions:
-      - condition: template
-        value_template: >
-          {{ states('input_datetime.back_garden_scheduled_run') not in
-             ['unknown','unavailable','']
-             and as_datetime(states('input_datetime.back_garden_scheduled_run'))
-                | as_local > (now() - timedelta(minutes=1)) }}
     actions:
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.irrigation_running
-                state: "on"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Scheduled run: Back Garden skipped — another zone is
-                    already running. Reschedule if needed.
-                  level: warning
-        default:
-          - action: system_log.write
-            data:
-              message: "Scheduled run: Back Garden starting."
-              level: info
-          - action: script.back_vegetable_garden_irrigation
-            data: {}
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.back_garden_scheduled_run
+      - action: script.irrigation_scheduled_run_zone
         data:
-          datetime: "1970-01-01 00:00:00"
+          zone_name: Back Garden
+          entity_prefix: back_garden
+          target_script: script.back_vegetable_garden_irrigation
     mode: single
 
   - id: irrigation_scheduled_run_side_garden
@@ -1781,38 +1572,12 @@ automation:
     triggers:
       - trigger: time
         at: input_datetime.side_garden_scheduled_run
-    conditions:
-      - condition: template
-        value_template: >
-          {{ states('input_datetime.side_garden_scheduled_run') not in
-             ['unknown','unavailable','']
-             and as_datetime(states('input_datetime.side_garden_scheduled_run'))
-                | as_local > (now() - timedelta(minutes=1)) }}
     actions:
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.irrigation_running
-                state: "on"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Scheduled run: Side Garden skipped — another zone is
-                    already running. Reschedule if needed.
-                  level: warning
-        default:
-          - action: system_log.write
-            data:
-              message: "Scheduled run: Side Garden starting."
-              level: info
-          - action: script.side_vegetable_garden_irrigation
-            data: {}
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.side_garden_scheduled_run
+      - action: script.irrigation_scheduled_run_zone
         data:
-          datetime: "1970-01-01 00:00:00"
+          zone_name: Side Garden
+          entity_prefix: side_garden
+          target_script: script.side_vegetable_garden_irrigation
     mode: single
 
   - id: irrigation_scheduled_run_front_garden
@@ -1824,38 +1589,12 @@ automation:
     triggers:
       - trigger: time
         at: input_datetime.front_garden_scheduled_run
-    conditions:
-      - condition: template
-        value_template: >
-          {{ states('input_datetime.front_garden_scheduled_run') not in
-             ['unknown','unavailable','']
-             and as_datetime(states('input_datetime.front_garden_scheduled_run'))
-                | as_local > (now() - timedelta(minutes=1)) }}
     actions:
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.irrigation_running
-                state: "on"
-            sequence:
-              - action: system_log.write
-                data:
-                  message: >
-                    Scheduled run: Front Garden skipped — another zone is
-                    already running. Reschedule if needed.
-                  level: warning
-        default:
-          - action: system_log.write
-            data:
-              message: "Scheduled run: Front Garden starting."
-              level: info
-          - action: script.front_garden_irrigation
-            data: {}
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.front_garden_scheduled_run
+      - action: script.irrigation_scheduled_run_zone
         data:
-          datetime: "1970-01-01 00:00:00"
+          zone_name: Front Garden
+          entity_prefix: front_garden
+          target_script: script.front_garden_irrigation
     mode: single
 
   # ===========================================================================
