@@ -53,11 +53,15 @@ todo_test:
         todo not in all_todos[project.entity_id]['items']|map(attribute='summary')
         -%}\n    {% set result.todos = result.todos + [todo] -%}\n  {% endif -%}\n{%
         endfor -%} {{ result.todos }}"
-  - data:
-      message: '{{ new_todos | join(''
+  - if:
+    - condition: template
+      value_template: '{{ new_todos | length > 0 }}'
+    then:
+    - data:
+        message: '{{ new_todos | join(''
 
-        '') }}'
-    action: notify.mobile_app_tis_iphone
+          '') }}'
+      action: notify.mobile_app_tis_iphone
   - repeat:
       for_each: '{{ new_todos }}'
       sequence:

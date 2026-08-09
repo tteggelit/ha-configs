@@ -115,7 +115,7 @@ automation:
       - platform: numeric_state
         entity_id: sensor.springfield_lightning_distance
         below: 70
-        id: 'springfield_il'
+        id: 'springfield'
       - platform: numeric_state
         entity_id: sensor.pontiac_lightning_distance
         below: 40

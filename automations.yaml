@@ -341,7 +341,7 @@
                   volume: 1
           action: notify.mobile_app_tis_iphone
         - data:
-            message: Front door is open!
+            message: Front door unlocked!
             data:
               push:
                 sound:
@@ -679,7 +679,7 @@
       metadata: {}
       data: {}
       target:
-        entity_id: media_player.u8000f8836
+        entity_id: media_player.basement_tv
     alias: If the basement TV is on, turn it off
   - action: switch.turn_off
     metadata: {}
