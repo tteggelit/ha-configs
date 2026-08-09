@@ -37,7 +37,7 @@ sensor:
     update_interval: 60s
   - platform: sgp30
     eco2:
-      name: "Stduio eCO2"
+      name: "Studio eCO2"
       accuracy_decimals: 1
     tvoc:
       name: "Studio TVOC"

@@ -17,6 +17,7 @@ image
 tts
 zigbee2mqtt/coordinator_backup.json
 zigbee2mqtt/state.json
+zigbee2mqtt/configuration_backup*.yaml
 
 # Private deploy key used only by scripts/commit_ha_version.sh (see
 # packages/config_repo_sync.yaml) to push .HA_VERSION bumps. Scoped to

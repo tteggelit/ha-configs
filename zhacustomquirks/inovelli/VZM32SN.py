@@ -411,7 +411,7 @@ MMWAVE_CLUSTER_ID = 0xFC32
         translation_key="mmwave_detect_sensitivity",
         fallback_name="mmWave detect sensitivity",
     )
-  .number(
+    .number(
         "mmwave_stay_life",
         MMWAVE_CLUSTER_ID,
         min_value=0,
