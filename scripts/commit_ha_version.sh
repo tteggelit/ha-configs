@@ -65,7 +65,11 @@ fi
 OLD_VERSION="$(git show HEAD:.HA_VERSION 2>/dev/null || echo unknown)"
 NEW_VERSION="$(cat .HA_VERSION)"
 
-if ! git commit -m "Bump .HA_VERSION: ${OLD_VERSION} -> ${NEW_VERSION}" -- .HA_VERSION; then
+# Scoped to this one commit via -c, not a persistent `git config` write --
+# so it can't bleed into your own manual commits on this host if you run
+# `git commit` yourself right after this script runs.
+if ! git -c user.name="HA Config Repo Sync" -c user.email="ha-version-bump@homeassistant.local" \
+  commit -m "Bump .HA_VERSION: ${OLD_VERSION} -> ${NEW_VERSION}" -- .HA_VERSION; then
   echo "git commit failed." >&2
   exit 1
 fi
