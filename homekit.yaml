@@ -3,6 +3,7 @@
   filter:
     include_domains:
       - alarm_control_panel
+      - climate
       - light
       - media_player
       - switch
@@ -32,6 +33,7 @@
   filter:
     include_domains:
       - alarm_control_panel
+      - climate
       - light
       - media_player
       - switch
