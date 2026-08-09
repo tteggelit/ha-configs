@@ -22,12 +22,21 @@
 #      with "Allow write access" checked.
 #   3. Confirm /config/.ssh/ is gitignored (it is, see .gitignore) before
 #      doing step 1 -- never let this key end up in a commit.
+#   4. Seed a known_hosts file for GitHub's SSH host key -- required
+#      because the HA Core container's default known_hosts is ephemeral
+#      (wiped on every Core update, i.e. exactly when this script most
+#      needs to work) so it has to live under /config instead:
+#        ssh-keyscan -t ed25519,rsa github.com >> /config/.ssh/known_hosts
+#      Verify the fingerprints this prints match GitHub's published
+#      values before trusting them:
+#      https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
 set -uo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR" || exit 1
 
 DEPLOY_KEY="$REPO_DIR/.ssh/ha_version_bump_deploy_key"
+KNOWN_HOSTS="$REPO_DIR/.ssh/known_hosts"
 
 if [ ! -f .HA_VERSION ]; then
   echo ".HA_VERSION does not exist -- nothing to commit." >&2
@@ -36,6 +45,11 @@ fi
 
 if [ ! -f "$DEPLOY_KEY" ]; then
   echo "Deploy key not found at $DEPLOY_KEY -- see the setup steps in this script's header comment." >&2
+  exit 1
+fi
+
+if [ ! -f "$KNOWN_HOSTS" ]; then
+  echo "known_hosts not found at $KNOWN_HOSTS -- see setup step 4 in this script's header comment." >&2
   exit 1
 fi
 
@@ -56,9 +70,16 @@ if ! git commit -m "Bump .HA_VERSION: ${OLD_VERSION} -> ${NEW_VERSION}" -- .HA_V
   exit 1
 fi
 
-export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
+export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o StrictHostKeyChecking=yes"
 
-if ! git push; then
+PUSH_OUTPUT="$(git push 2>&1)"
+PUSH_STATUS=$?
+
+if [ "$PUSH_STATUS" -ne 0 ]; then
+  echo "$PUSH_OUTPUT" >&2
+  if echo "$PUSH_OUTPUT" | grep -qi "host key verification failed"; then
+    echo "known_hosts at $KNOWN_HOSTS doesn't have a trusted entry for this host -- see setup step 4 in this script's header comment." >&2
+  fi
   echo ".HA_VERSION committed locally (${OLD_VERSION} -> ${NEW_VERSION}) but push failed -- reconcile manually next time you're on the host (git pull, then git push)." >&2
   exit 1
 fi
