@@ -139,6 +139,12 @@ input_datetime:
     has_time: true
     icon: mdi:clock-end
 
+  rain_delay_until:
+    name: Rain Delay Until
+    has_date: true
+    has_time: true
+    icon: mdi:clock-end
+
   back_garden_scheduled_run:
     name: Back Garden Scheduled Run
     has_date: true
@@ -1636,6 +1642,17 @@ automation:
   # about to start imminently, missing scenarios like "heavy rain forecast
   # for this evening" when the automation runs in the early morning watering
   # window. A 24h window catches the whole remainder of the day.
+  #
+  # Expiry uses the same input_datetime + separate poller pattern as
+  # IRRIGATION PAUSE above, rather than an in-automation `delay: hours: 24`.
+  # A restart during an in-automation delay destroys that automation
+  # instance, leaving rain_delay_active stuck on forever with nothing to
+  # ever turn it back off. Storing the expiry in a persisted input_datetime
+  # and checking it via a periodic poller survives restarts. The
+  # rain_delay_active: "off" condition below prevents every hourly
+  # re-check (while the forecast condition remains true) from repeatedly
+  # pushing the expiry another 24 hours out — it only sets once, on the
+  # transition into rain delay.
   # ===========================================================================
 
   - id: irrigation_rain_delay_set
@@ -1648,7 +1665,16 @@ automation:
         value_template: >
           {{ state_attr('sensor.irrigation_nws_forecast_cache', 'imminent_heavy_rain_24h') == true
              and state_attr('sensor.irrigation_met_no_forecast_cache', 'imminent_heavy_rain_24h') == true }}
+      - condition: state
+        entity_id: input_boolean.rain_delay_active
+        state: "off"
     actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.rain_delay_until
+        data:
+          datetime: >
+            {{ (now() + timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S') }}
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.rain_delay_active
@@ -1656,10 +1682,27 @@ automation:
         data:
           message: >
             Rain delay activated — both NWS and Met.no forecast >80% / >0.5"
-            within the next 24 hours. Irrigation suppressed for 24 hours.
+            within the next 24 hours. Irrigation suppressed until
+            {{ states('input_datetime.rain_delay_until') }}.
           level: info
-      - delay:
-          hours: 24
+    mode: single
+
+  # ===========================================================================
+  # RAIN DELAY — Auto-expire
+  # ===========================================================================
+
+  - id: irrigation_rain_delay_expire
+    alias: "Irrigation — Auto-Expire Rain Delay"
+    triggers:
+      - trigger: time_pattern
+        minutes: "/30"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ is_state('input_boolean.rain_delay_active', 'on')
+             and now() >= states('input_datetime.rain_delay_until')
+                 | as_datetime | as_local }}
+    actions:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.rain_delay_active
@@ -1668,7 +1711,6 @@ automation:
           message: "Rain delay cleared — normal irrigation scheduling resumed."
           level: info
     mode: single
-    max_exceeded: silent
 
   # ===========================================================================
   # ONE-TIME SCHEDULED RUNS

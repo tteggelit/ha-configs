@@ -39,55 +39,76 @@ script:
       # Step 2: Wait for transitions to complete
       - delay: 5
       
-      # Step 3: Verify and retry only failed lights
+      # Step 3: Verify and retry only lights that fell short of their target.
+      #
+      # Each check compares a light's *actual* current percent against
+      # *its own* intended target from Step 1, not an arbitrary shared
+      # threshold. The previous version checked `brightness > 30` (an
+      # upper bound, and the same threshold for light_1 and light_3
+      # despite them having different 35%/15% targets) -- meaning lights
+      # that had already reached their real target got flagged as
+      # "failed" and immediately reset to different, wrong values
+      # (25%/5%) moments after being set correctly.
+      #
+      # retry_tolerance_pct=5: a light more than 5 percentage points
+      # short of its target is treated as not having taken the original
+      # command (e.g. a dropped Zigbee message), not as normal
+      # transition/rounding noise.
       - choose:
           - conditions:
               - condition: or
                 conditions:
-                  - condition: numeric_state
-                    entity_id: light.basement_entertainment_light_1
-                    attribute: brightness
-                    above: 30
-                  - condition: numeric_state
-                    entity_id: light.basement_entertainment_light_3
-                    attribute: brightness
-                    above: 30
-                  - condition: numeric_state
-                    entity_id: light.basement_entertainment_light_2
-                    attribute: brightness
-                    above: 10
-                  - condition: numeric_state
-                    entity_id: light.basement_entertainment_light_4
-                    attribute: brightness
-                    above: 10
+                  - condition: template
+                    value_template: >
+                      {{ (state_attr('light.basement_entertainment_light_3', 'brightness') | int(0)) / 255 * 100 < 15 - 5 }}
+                  - condition: template
+                    value_template: >
+                      {{ (state_attr('light.basement_entertainment_light_4', 'brightness') | int(0)) / 255 * 100 < 40 - 5 }}
+                  - condition: template
+                    value_template: >
+                      {{ (state_attr('light.basement_entertainment_light_1', 'brightness') | int(0)) / 255 * 100 < 35 - 5 }}
+                  - condition: template
+                    value_template: >
+                      {{ (state_attr('light.basement_entertainment_light_2', 'brightness') | int(0)) / 255 * 100 < 35 - 5 }}
             sequence:
-              # Retry lights that didn't reach target (shorter transition for retry)
+              # Retry light 3 at its own 15% target if it fell short
               - action: light.turn_on
                 data:
-                  brightness_pct: 25
+                  brightness_pct: 15
                   transition: 2
                 target:
                   entity_id: >
-                    {% set failed = [] %}
-                    {% for light in ['light.basement_entertainment_light_3', 'light.basement_entertainment_light_4'] %}
-                      {% if state_attr(light, 'brightness') | int > 30 %}
-                        {% set failed = failed + [light] %}
-                      {% endif %}
-                    {% endfor %}
-                    {{ failed if failed else [] }}
+                    {% if (state_attr('light.basement_entertainment_light_3', 'brightness') | int(0)) / 255 * 100 < 15 - 5 %}
+                      {{ ['light.basement_entertainment_light_3'] }}
+                    {% else %}
+                      {{ [] }}
+                    {% endif %}
+              # Retry light 4 at its own 40% target if it fell short
               - action: light.turn_on
                 data:
-                  brightness_pct: 5
+                  brightness_pct: 40
+                  transition: 2
+                target:
+                  entity_id: >
+                    {% if (state_attr('light.basement_entertainment_light_4', 'brightness') | int(0)) / 255 * 100 < 40 - 5 %}
+                      {{ ['light.basement_entertainment_light_4'] }}
+                    {% else %}
+                      {{ [] }}
+                    {% endif %}
+              # Retry lights 1/2 at their shared 35% target if either fell short
+              - action: light.turn_on
+                data:
+                  brightness_pct: 35
                   transition: 2
                 target:
                   entity_id: >
                     {% set failed = [] %}
                     {% for light in ['light.basement_entertainment_light_1', 'light.basement_entertainment_light_2'] %}
-                      {% if state_attr(light, 'brightness') | int > 10 %}
+                      {% if (state_attr(light, 'brightness') | int(0)) / 255 * 100 < 35 - 5 %}
                         {% set failed = failed + [light] %}
                       {% endif %}
                     {% endfor %}
-                    {{ failed if failed else [] }}
+                    {{ failed }}
     alias: Dim Basement Entertainment lights for watching TV
     description: ''
 

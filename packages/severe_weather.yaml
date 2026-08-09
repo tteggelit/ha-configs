@@ -27,8 +27,17 @@
 #   This will be used to set the User-agent for the API calls
 #   *You need to set this appropriately*
 #   
-# - input.nws_processed_alerts : 
-#   This is used to track which NWS alerts have been processed to prevent inadvertent duplicate alerts
+# - input.nws_processed_alerts :
+#   Comma-joined list of short hashes (first 12 hex chars of an md5 of
+#   each alert's real NWS id) already notified about, so alerts aren't
+#   re-notified. sensor.nws_alert_event_1-4 below are positional --
+#   they index directly into the NWS API's active-alerts array, so an
+#   alert can shift from e.g. slot 2 to slot 1 when an earlier one
+#   expires. Dedup has to key on the alert's own id, not which slot it
+#   currently sits in. Hashed and truncated (not the raw id) to stay
+#   comfortably under input_text's 255-character hard limit even with
+#   several alerts cycling through during one sustained weather episode.
+#   Cleared to empty whenever sensor.nws_alert_count returns to 0.
 #
 # - input.nws_alerts_quiet_modes : 
 #   An input to disable alerting 
@@ -578,9 +587,18 @@ automation:
                   {% elif severity == 'Severe' %}🟠
                   {% else %}🟡
                   {% endif %}
+                # Keyed on the alert's own id (hashed and truncated to stay
+                # well under input_text's 255-char limit), not its slot --
+                # sensor.nws_alert_event_1-4 are positional indexes into the
+                # NWS API's active-alerts array, so an alert can shift slots
+                # as earlier ones expire. A real list-membership check
+                # (split on comma), not a substring test, so one hash can't
+                # false-match as a prefix of another.
+                alert_hash: "{{ (alert_id | md5)[:12] if alert_id else '' }}"
                 processed_alerts: "{{ states('input_text.nws_processed_alerts') }}"
-                already_processed: "{{ alert_id and alert_id in processed_alerts }}"
-                
+                processed_hashes: "{{ processed_alerts.split(',') if processed_alerts else [] }}"
+                already_processed: "{{ alert_hash and alert_hash in processed_hashes }}"
+
             - if:
                 # Only process if alert exists and hasn't been processed yet
                 - condition: template
@@ -593,9 +611,9 @@ automation:
                   data:
                     value: >
                       {% if processed_alerts %}
-                        {{ processed_alerts ~ ',' ~ alert_id }}
+                        {{ processed_alerts ~ ',' ~ alert_hash }}
                       {% else %}
-                        {{ alert_id }}
+                        {{ alert_hash }}
                       {% endif %}
                 
                 - parallel:
@@ -734,14 +752,38 @@ automation:
               - condition: template
                 value_template: "{{ action_type == 'VIEW_NWS_ALERT' }}"
             sequence:
-              # Send full details to the device that requested it
+              # Send full details to the device that requested it.
+              # trigger.event.data.device_id is a device-registry UUID, not
+              # a slug -- it can't be regex-sanitized into a valid
+              # notify.mobile_app_* service name (that was silently broken
+              # before). Map the known device_ids to their real notify
+              # targets instead.
+              #
+              # To add a new device here:
+              #   1. Settings -> Devices & Services -> Devices -> click the
+              #      phone's device entry. The URL becomes
+              #      .../config/devices/device/<device_id> -- that trailing
+              #      segment is the UUID to use as a new map key.
+              #   2. Verify it's actually what this event carries: Developer
+              #      Tools -> Events -> listen for event type
+              #      "mobile_app_notification_action", then tap any action
+              #      button on a notification from that phone. The fired
+              #      event's data.device_id is the exact value
+              #      trigger.event.data.device_id will hold here.
               - variables:
-                  requesting_device: "{{ trigger.event.data.device_id }}"
-              - action: "notify.mobile_app_{{ trigger.event.data.device_id | regex_replace('[^a-z0-9_]', '_') }}"
-                data:
-                  title: "Full Alert Details"
-                  message: >
-                    {{ state_attr('sensor.nws_alert_event_' ~ event_num, 'description') }}
+                  device_notify_map:
+                    c649c07764020e9d99e38656cf640e62: notify.mobile_app_tis_iphone
+                    ba46bf63c37c0f5c0e4c054b5d7286c7: notify.mobile_app_amys_iphone
+                  requesting_notify_target: "{{ device_notify_map.get(trigger.event.data.device_id) }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ requesting_notify_target is not none }}"
+                then:
+                  - action: "{{ requesting_notify_target }}"
+                    data:
+                      title: "Full Alert Details"
+                      message: >
+                        {{ state_attr('sensor.nws_alert_event_' ~ event_num, 'description') }}
           - conditions:
               - condition: template
                 value_template: "{{ action_type == 'DISMISS_NWS_ALERT' }}"
