@@ -98,3 +98,221 @@ cycle_soak_zone_watering_cancelable_monitored_3:
       valve_entity: valve.back_vegetable_garden_timer_zone
       zone_name: Back Vegetable Garden
       notify_on_completion: true
+secure_front_door:
+  alias: Secure Front Door
+  description: >-
+    If the front door is open, notify immediately. Otherwise, if it's
+    unlocked, lock it and notify if it's still unlocked 30 seconds
+    later. Shared by "Alarm Away Actions" and "Alarm Home Actions".
+  sequence:
+    - if:
+        - condition: state
+          entity_id: binary_sensor.front_door_sensor
+          state: 'on'
+      then:
+        - metadata: {}
+          data:
+            message: Front door is open!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+          action: notify.mobile_app_tis_iphone
+        - metadata: {}
+          data:
+            message: Front door is open!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+          action: notify.mobile_app_amys_iphone
+      else:
+        - if:
+            - condition: state
+              entity_id: lock.front_door_lock
+              state:
+                - unlocked
+          then:
+            - metadata: {}
+              data: {}
+              target:
+                entity_id: lock.front_door_lock
+              action: lock.lock
+            - delay:
+                hours: 0
+                minutes: 0
+                seconds: 30
+                milliseconds: 0
+              alias: Wait 30 seconds
+            - if:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state:
+                    - unlocked
+              then:
+                - metadata: {}
+                  data:
+                    message: Front door unlocked!
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 1
+                  action: notify.mobile_app_tis_iphone
+                - metadata: {}
+                  data:
+                    message: Front door unlocked!
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 1
+                  action: notify.mobile_app_amys_iphone
+  mode: single
+secure_garage:
+  alias: Secure Garage
+  description: >-
+    If the garage door is open, attempt to close it; notify if it's
+    still open a minute later. Shared by "Alarm Away Actions" and
+    "Alarm Home Actions".
+  sequence:
+    - if:
+        - condition: state
+          entity_id: cover.garage_door
+          state: open
+      then:
+        - metadata: {}
+          data: {}
+          target:
+            entity_id: cover.garage_door
+          action: cover.close_cover
+        - delay:
+            hours: 0
+            minutes: 1
+            seconds: 0
+            milliseconds: 0
+        - if:
+            - condition: state
+              entity_id: cover.garage_door
+              state: open
+          then:
+            - metadata: {}
+              data:
+                message: Garage door is open!
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+              action: notify.mobile_app_tis_iphone
+            - metadata: {}
+              data:
+                message: Garage door is open!
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+              action: notify.mobile_app_amys_iphone
+  mode: single
+notify_third_car_garage_open:
+  alias: Notify If Third Car Garage Door Is Open
+  description: >-
+    Shared by "Alarm Away Actions" and "Alarm Home Actions".
+  sequence:
+    - if:
+        - condition: state
+          entity_id: binary_sensor.third_car_garage_motion_sensor_contact
+          state:
+            - 'on'
+      then:
+        - metadata: {}
+          data:
+            message: Third car garage door is open!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+          action: notify.mobile_app_tis_iphone
+        - metadata: {}
+          data:
+            message: Third car garage door is open!
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1
+          action: notify.mobile_app_amys_iphone
+  mode: single
+turn_off_house_tvs:
+  alias: Turn Off House TVs
+  description: >-
+    Shared by "Alarm Away Actions" and "Alarm Home Actions".
+  sequence:
+    - if:
+        - condition: state
+          entity_id: media_player.living_room_tv
+          state:
+            - 'on'
+      then:
+        - action: media_player.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: media_player.living_room_tv
+      alias: If the living room TV is on, turn it off
+    - if:
+        - condition: state
+          entity_id: media_player.basement_tv
+          state:
+            - 'on'
+      then:
+        - action: media_player.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: media_player.basement_tv
+      alias: If the basement TV is on, turn it off
+  mode: single
+house_lights_off:
+  alias: Turn Off Common House Lights
+  description: >-
+    Switches and lights common to "Alarm Away Actions" and "Alarm Home
+    Actions" -- Home Actions also turns off switch.deck_lights, which
+    Away doesn't, handled separately in that automation.
+  sequence:
+    - action: switch.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id:
+          - switch.christmas_tree_switch_3
+          - switch.living_room_air_purifier_outlet
+          - switch.living_room_side_lights_outlet
+    - action: light.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id:
+          - light.kitchen_cabinet_lights
+          - light.living_room_lights
+          - light.basement_bathroom_light_switch
+          - light.basement_entertainment_area_light_switch
+          - light.basement_stairs_light_switch
+          - light.gym_light_switch
+          - light.mechanical_room_light_switch
+          - light.pool_table_light_switch
+          - light.pool_table_area_light_switch
+          - light.guest_bedroom_light_switch
+  mode: single
