@@ -1,8 +1,8 @@
 ###############################################################################
 # Humidity Controller for Home Assistant
-# 
+#
 # This package uses dew point calculations and forecasted low temperatures
-# with asymmetric rate limiting to prevent window condensation while 
+# with asymmetric rate limiting to prevent window condensation while
 # maximizing indoor comfort. It was refined and validated using Claude.ai.
 #
 # FEATURES:
@@ -17,25 +17,25 @@
 # ============================================================================
 # QUICK CONFIGURATION GUIDE
 # ============================================================================
-# 
+#
 # To set up this integration, you only need to change THREE entity IDs:
-# 
+#
 # 1. Go to Settings -> Devices & Services -> Helpers
 # 2. Find these three helpers (they'll be created after first load):
 #    - "Humidity Controller Weather Entity" -> Change to your weather integration
 #    - "Humidity Controller Humidifier Entity" -> Change to your humidifier
 #    - "Humidity Controller Climate Entity" -> Change to your thermostat
-# 
+#
 # Alternatively, edit the initial values in the configuration below:
 #    humidity_controller_weather_entity: initial: "weather.YOUR_WEATHER"
 #    humidity_controller_humidifier_entity: initial: "humidifier.YOUR_HUMIDIFIER"
 #    humidity_controller_climate_entity: initial: "climate.YOUR_THERMOSTAT"
-# 
+#
 ###############################################################################
 # ============================================================================
 # ADAVANCED CONFIGURATION OPTIONS
 # ============================================================================
-# 
+#
 # The following helpers can be further modified to accommodate your specific
 # preferences / home conditions:
 #
@@ -66,7 +66,7 @@
 # humidity level (see below for calculation explanation).
 #
 # The goal is to provide a balance between comfort (typically higher humidity
-# levels) and too much condensation (which can lead to mold, mildew, and 
+# levels) and too much condensation (which can lead to mold, mildew, and
 # material degradation - wood, drywall, etc.). The major assumption
 # used is that it takes much longer to passively dehumidify than to actively
 # humidify - i.e., in the absence of an active dehumidifier, it takes longer
@@ -88,7 +88,7 @@
 #    - Formula: Indoor_temp - (Indoor_temp - Outdoor_temp) × (R_interior / (R_window + R_interior))
 #    - Example with -5°F outside, 68°F inside, R-2.0 windows:
 #      Surface temp = 68 - (68 - (-5)) × (0.68 / (2.0 + 0.68)) = 51°F
-#    
+#
 # 3. CALCULATE SAFE HUMIDITY LEVEL (using Magnus formula)
 #    - Calculates the maximum humidity where dew point equals surface temperature
 #    - This is the point where condensation would form
@@ -125,13 +125,13 @@
 # EXAMPLE SCENARIOS:
 #
 #   Scenario: -5°F outside, 68°F inside
-#   
+#
 #   R-1.0 windows (single-pane):
 #     Surface temp = 46°F -> Safe humidity ≈ 25% -> Target = 20-25%
-#   
+#
 #   R-2.0 windows (standard double-pane):
 #     Surface temp = 51°F -> Safe humidity ≈ 35% -> Target = 30-35%
-#   
+#
 #   R-3.0 windows (low-E double-pane):
 #     Surface temp = 54°F -> Safe humidity ≈ 42% -> Target = 37-42%
 #
@@ -143,16 +143,16 @@
 # This package uses the following thermodynamic and heat transfer formulas:
 #
 # 1. MAGNUS FORMULA FOR DEW POINT CALCULATION
-#    Source: Alduchov & Eskridge (1996), "Improved Magnus Form Approximation 
+#    Source: Alduchov & Eskridge (1996), "Improved Magnus Form Approximation
 #            of Saturation Vapor Pressure"
 #    Formula: Td = (b × A) / (a - A)
 #    Where:   A = ln(RH/100) + (a × T)/(b + T)
 #             a = 17.27, b = 237.7C
-#    
+#
 #    Why used: This is a meteorological standard for calculating dew point
 #              from temperature and relative humidity. Accurate within +/- 0.4C
 #              for temperatures between -40C and 50C.
-#    
+#
 #    Application: We use this in REVERSE - given a surface temperature, we
 #                 calculate the maximum relative humidity before the dew point
 #                 equals that surface temperature (when condensation forms).
@@ -162,11 +162,11 @@
 #    Formula: T_surface = T_indoor - (T_indoor - T_outdoor) × (R_inside / R_total)
 #    Where:   R_inside = 0.68 (standard interior surface film resistance)
 #             R_total = R_window + R_inside
-#    
+#
 #    Why used: This calculates the temperature of the interior window surface
 #              based on the window's thermal resistance (R-value). The inner
 #              surface is where condensation forms.
-#    
+#
 #    Application: Determines the coldest surface in the room where moisture
 #                 will condense first. This is the critical temperature for
 #                 preventing condensation.
@@ -178,36 +178,36 @@
 #      - Double pane: R-2.0 (U-factor ~0.5)
 #      - Double pane low-E: R-3.0 (U-factor ~0.33)
 #      - Triple pane: R-4.0+ (U-factor ~0.25)
-#    
+#
 #    Why used: Different window types have dramatically different insulation
 #              properties. A triple-pane window stays much warmer on the inside
 #              than a single-pane window at the same outdoor temperature.
-#    
+#
 #    Application: User-configurable parameter that reflects their actual
 #                 window quality, making calculations personalized.
 #
 # 4. SAFETY MARGIN (-5% from calculated maximum)
 #    Source: Industry practice from HVAC and building science
 #    Reference: Building Science Corporation, "Understanding Vapor Barriers"
-#    
+#
 #    Why used: The Magnus formula gives the exact condensation point, but:
 #              - Windows may have colder spots (corners, edges, frames)
 #              - Air doesn't mix perfectly (micro-climates near windows)
 #              - Humidity sensors have +/- 2-3% accuracy
 #              - Better safe than sorry (condensation causes mold/damage)
-#    
+#
 #    Application: Provides a buffer zone to account for real-world variations
 #                 and measurement uncertainties.
 #
 # 5. ASYMMETRIC RATE LIMITING
 #    Source: Empirical observation of HVAC system physics
-#    
+#
 #    Why used: Physics of humidity control is asymmetric:
 #              - Decreasing humidity: Turn off humidifier, natural air exchange
 #                and HVAC dehumidification remove moisture over hours/days
 #              - Increasing humidity: Active humidification can add moisture
 #                quickly (within an hour)
-#    
+#
 #    Application: Allows immediate humidity target drops when cold weather
 #                 arrives (preventing condensation) but limits increases to
 #                 X%/hour when warming (giving humidity time to drop naturally
@@ -232,7 +232,7 @@ input_text:
     max: 255
     initial: "weather.forecast_home"
     icon: mdi:weather-partly-cloudy
-    
+
   humidity_controller_humidifier_entity:
     name: Humidity Controller Humidifier Entity
     max: 255
@@ -404,7 +404,7 @@ automation:
         data:
           message: >
             Humidity updated to {{ states('sensor.humidity_controller_target_humidity_level') }}%
-            (Safe: {{ states('sensor.humidity_controller_safe_humidity_level') }}%, 
+            (Safe: {{ states('sensor.humidity_controller_safe_humidity_level') }}%,
             Surface temp: {{ states('sensor.humidity_controller_indoor_surface_temperature') }}°F,
             Forecast low: {{ states('sensor.humidity_controller_forecast_low_temperature') }}°F,
             Rate limited: {{ state_attr('sensor.humidity_controller_target_humidity_level', 'rate_limited') }})
@@ -434,7 +434,7 @@ automation:
           title: "Humidity Adjusted"
           message: >
             Humidity target changed from {{ trigger.from_state.state }}% to {{ trigger.to_state.state }}%
-            
+
             Forecast low (next {{ state_attr('sensor.humidity_controller_forecast_low_temperature', 'days_checked') }} days): {{ states('sensor.humidity_controller_forecast_low_temperature') }}°F
             Window surface temp: {{ states('sensor.humidity_controller_indoor_surface_temperature') }}°F
             Safe humidity: {{ states('sensor.humidity_controller_safe_humidity_level') }}%
@@ -545,20 +545,20 @@ automation:
 template:
   - sensor:
       - name: "Humidity Controller Forecast Low Temperature"
-        #unique_id: humidity_controller_forecast_low_temperature
+        # unique_id: humidity_controller_forecast_low_temperature
         unit_of_measurement: "°F"
         icon: mdi:thermometer-chevron-down
         state: >
           {% set forecast_json = states('input_text.humidity_controller_forecast_data') %}
           {% set days_to_check = states('input_number.humidity_controller_forecast_days') | int(3) %}
-          
+
           {% if forecast_json != '[]' and forecast_json != '' %}
             {% set forecast = forecast_json | from_json %}
-            
+
             {% if forecast is not none and forecast | length > 0 %}
               {# forecast is now just a list of temperatures #}
               {% set lows = forecast | select('number') | list %}
-              
+
               {% if lows | length > 0 %}
                 {{ lows | min | round(1) }}
               {% else %}
@@ -594,13 +594,13 @@ template:
             {% endif %}
 
       - name: "Humidity Controller Outdoor Dew Point"
-        #unique_id: humidity_controller_outdoor_dew_point
+        # unique_id: humidity_controller_outdoor_dew_point
         unit_of_measurement: "°F"
         icon: mdi:water-thermometer
         state: >
           {% set temp = state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') | float(0) %}
           {% set humidity = state_attr(states('input_text.humidity_controller_weather_entity'), 'humidity') | float(0) %}
-          
+
           {# Magnus formula for dew point calculation #}
           {% set a = 17.27 %}
           {% set b = 237.7 %}
@@ -608,27 +608,27 @@ template:
           {% set alpha = ((a * temp_c) / (b + temp_c)) + (humidity / 100.0) | log %}
           {% set dew_point_c = (b * alpha) / (a - alpha) %}
           {% set dew_point_f = (dew_point_c * 9/5) + 32 %}
-          
+
           {{ dew_point_f | round(1) }}
         availability: >
           {{ state_attr(states('input_text.humidity_controller_weather_entity'), 'temperature') != None and
              state_attr(states('input_text.humidity_controller_weather_entity'), 'humidity') != None }}
 
       - name: "Humidity Controller Indoor Surface Temperature"
-        #unique_id: humidity_controller_indoor_surface_temperature
+        # unique_id: humidity_controller_indoor_surface_temperature
         unit_of_measurement: "°F"
         icon: mdi:window-closed-variant
         state: >
           {% set outdoor_temp = states('sensor.humidity_controller_forecast_low_temperature') | float(40) %}
           {% set indoor_temp = state_attr(states('input_text.humidity_controller_climate_entity'), 'current_temperature') | float(68) %}
           {% set r_value = states('input_number.humidity_controller_r_value') | float(2.0) %}
-          
+
           {# Calculate inner surface temperature based on R-value #}
           {# Assumes R-value of 0.68 for interior surface film #}
           {% set r_interior = 0.68 %}
           {% set temp_diff = indoor_temp - outdoor_temp %}
           {% set surface_temp = indoor_temp - (temp_diff * r_interior / (r_value + r_interior)) %}
-          
+
           {{ surface_temp | round(1) }}
         availability: >
           {{ states('sensor.humidity_controller_forecast_low_temperature') not in ['unavailable', 'unknown', 'none'] }}
@@ -641,27 +641,27 @@ template:
             {{ states('input_number.humidity_controller_r_value') }}
 
       - name: "Humidity Controller Safe Humidity Level"
-        #unique_id: humidity_controller_safe_humidity_level
+        # unique_id: humidity_controller_safe_humidity_level
         unit_of_measurement: "%"
         icon: mdi:water-percent-alert
         state: >
           {% set surface_temp = states('sensor.humidity_controller_indoor_surface_temperature') | float(50) %}
           {% set indoor_temp = state_attr(states('input_text.humidity_controller_climate_entity'), 'current_temperature') | float(68) %}
           {% set safety_margin = states('input_number.humidity_controller_safety_margin') | float(10) %}
-          
+
           {# Calculate maximum safe humidity to prevent condensation #}
           {# This uses the Magnus formula in reverse #}
           {% set a = 17.27 %}
           {% set b = 237.7 %}
           {% set surface_temp_c = (surface_temp - 32) * 5/9 %}
           {% set indoor_temp_c = (indoor_temp - 32) * 5/9 %}
-          
+
           {% set gamma_surface = (a * surface_temp_c) / (b + surface_temp_c) %}
           {% set gamma_indoor = (a * indoor_temp_c) / (b + indoor_temp_c) %}
-          
+
           {# Relative humidity at which dew point equals surface temp #}
           {% set safe_rh = 100 * (e ** (gamma_surface - gamma_indoor)) %}
-          
+
           {# Apply configurable safety margin #}
           {% set safe_humidity = safe_rh - safety_margin %}
           {{ [15, [safe_humidity, 50] | min] | max | int }}
@@ -676,7 +676,7 @@ template:
             {{ states('sensor.humidity_controller_forecast_low_temperature') }}
 
       - name: "Humidity Controller Target Humidity Level"
-        #unique_id: humidity_controller_target_humidity_level
+        # unique_id: humidity_controller_target_humidity_level
         unit_of_measurement: "%"
         icon: mdi:water-percent
         state: >
@@ -684,10 +684,10 @@ template:
           {% set last_target = states('input_number.humidity_controller_last_target') | float(35) %}
           {% set offset = states('input_number.humidity_controller_offset') | float(0) %}
           {% set max_increase = states('input_number.humidity_controller_max_increase') | float(2) %}
-          
+
           {# Calculate desired target with offset #}
           {% set desired_target = safe_humidity + offset %}
-          
+
           {# Apply asymmetric rate limiting #}
           {% if desired_target < last_target %}
             {# Allow immediate decreases (rapid response to cold) #}
@@ -696,7 +696,7 @@ template:
             {# Limit increases to max_increase per hour #}
             {% set new_target = [desired_target, last_target + max_increase] | min %}
           {% endif %}
-          
+
           {# Clamp between 15-50% #}
           {{ [15, [new_target, 50] | min] | max | int }}
         availability: >
@@ -739,7 +739,7 @@ template:
 # OPTIONAL: Lovelace Dashboard Card
 # Add this to your dashboard for detailed monitoring
 # ============================================================================
-# 
+#
 #  views:
 #    - title: Home
 #      type: panel

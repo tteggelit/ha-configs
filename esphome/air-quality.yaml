@@ -45,10 +45,10 @@ sensor:
     baseline:
       eco2_baseline: 0x9509
       tvoc_baseline: 0x8fce
-    compensation: 
+    compensation:
       humidity_source: esphome_studio_humidity
       temperature_source: esphome_studio_temperature
-    store_baseline: yes
+    store_baseline: true
     update_interval: 60s
   - platform: aht10
     variant: AHT10
@@ -59,7 +59,7 @@ sensor:
       name: "Studio Humidity"
       id: "esphome_studio_humidity"
     update_interval: 60s
-    
+
 # Enable logging
 logger:
 #  level: DEBUG
@@ -89,4 +89,3 @@ wifi:
     password: !secret wifi_ap_password
 
 captive_portal:
-    

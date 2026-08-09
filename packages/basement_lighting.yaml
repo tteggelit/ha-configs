@@ -16,7 +16,7 @@ script:
         target:
           entity_id:
             - light.basement_entertainment_light_3
-      
+
       - action: light.turn_on
         data:
           brightness_pct: 40
@@ -24,9 +24,9 @@ script:
         target:
           entity_id:
             - light.basement_entertainment_light_4
-      
-      #- delay: 0.5  # Give Zigbee mesh time to process
-      
+
+      # - delay: 0.5  # Give Zigbee mesh time to process
+
       - action: light.turn_on
         data:
           brightness_pct: 35
@@ -35,10 +35,10 @@ script:
           entity_id:
             - light.basement_entertainment_light_1
             - light.basement_entertainment_light_2
-      
+
       # Step 2: Wait for transitions to complete
       - delay: 5
-      
+
       # Step 3: Verify and retry only lights that fell short of their target.
       #
       # Each check compares a light's *actual* current percent against

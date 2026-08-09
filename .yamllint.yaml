@@ -28,16 +28,6 @@ rules:
     spaces: consistent
     indent-sequences: whatever
 
-  # The existing repo has scattered trailing whitespace, stray blank
-  # lines, and a missing final newline in one file — pre-existing style
-  # noise, not something this tooling change should force-fix as a side
-  # effect (a future style-normalization pass, tracked separately, is
-  # the right place to clean these up). Disabled so CI reflects new
-  # regressions going forward rather than failing on day one.
-  trailing-spaces: disable
-  empty-lines: disable
-  new-line-at-end-of-file: disable
-
   # Decorative banner comments (e.g. "# ===...===") are used throughout
   # packages/*.yaml for section headers; don't flag their spacing/indent.
   comments:

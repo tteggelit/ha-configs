@@ -1,15 +1,15 @@
 # This package is based off of https://gist.github.com/finity69x2/2b8336429008e9e783bdbf70905c9f6c
 #
 # This will allow several functions including a persistent pop-up notification on your HA front end, a notification to whichever notify service you use (I’m using just a mobile device notification in this example), and the TTS integration
-# 
+#
 # You next need to find either your NWS Zone ID or County ID. It is better to use both ID's here.
-# 
+#
 # You can find your Zone or County ID by going to https://alerts.weather.gov/, scroll down to your state and click on the “zone list” and/or "county list" then look for the entry for your county.
-# 
+#
 # Once you have your desired ID you create a sensor, replacing my id (ILZ020, ILC093) with yours. The ID is case sensitive!
-# 
+#
 # Then when you have your ID's, enter them into the configuration below.
-# 
+#
 # These are my Zone and County IDs
 # ILZ020
 # ILC093
@@ -23,10 +23,10 @@
 #   This will be used to set the User-agent for the API calls
 #   *You need to set this appropriately*
 #
-# - input.nws_api_dns : 
+# - input.nws_api_dns :
 #   This will be used to set the User-agent for the API calls
 #   *You need to set this appropriately*
-#   
+#
 # - input.nws_processed_alerts :
 #   Comma-joined list of short hashes (first 12 hex chars of an md5 of
 #   each alert's real NWS id) already notified about, so alerts aren't
@@ -39,33 +39,33 @@
 #   several alerts cycling through during one sustained weather episode.
 #   Cleared to empty whenever sensor.nws_alert_count returns to 0.
 #
-# - input.nws_alerts_quiet_modes : 
-#   An input to disable alerting 
+# - input.nws_alerts_quiet_modes :
+#   An input to disable alerting
 #
-# - input.nws_last_alert : 
+# - input.nws_last_alert :
 #   The last alert date and time. This is used to prevent rapid, successive alerts
 #
-# - input.nws_alert_count_total : 
+# - input.nws_alert_count_total :
 #   A counted of alerts processed
 #
-# - input.nws_tts_volume_normal : 
+# - input.nws_tts_volume_normal :
 #   Used to set the volume level for TTS normal alerts
 #
-# - input.nws_tts_volume_critical : 
+# - input.nws_tts_volume_critical :
 #   Used to set the volume level for TTS critical alerts
 #
-# - input.nws_notification_level : 
+# - input.nws_notification_level :
 #   Used to set the severity of alerts you want to be notified about
 #
-# - input.nws_tts_targets : 
+# - input.nws_tts_targets :
 #   Select which TTS devices you want alerts sent to
 #   *You need to update the selections and devices for your configuration*
 #
-# - input.nws_mobile_devices_critical : 
+# - input.nws_mobile_devices_critical :
 #   Select which mobile devices get critical notifications
 #   *You need to update the selections and devices for your configuration*
 #
-# - input.nws_mobile_devices_normal : 
+# - input.nws_mobile_devices_normal :
 #   Select which mobile devices get non-critical notifications
 #   *You need to update the selections and devices for your configuration*
 
@@ -75,13 +75,13 @@ input_text:
     initial: "ILZ020"
     max: 10
     icon: mdi:map-marker
-  
+
   nws_county:
     name: NWS County
     initial: "ILC093"
     max: 10
     icon: mdi:map-marker
-  
+
   nws_api_email:
     name: NWS API email
     initial: "me@example.com"
@@ -120,7 +120,7 @@ input_number:
     max: 10000
     step: 1
     mode: box
-  
+
   nws_tts_volume_normal:
     name: NWS TTS Volume (Normal Alerts)
     min: 0
@@ -128,7 +128,7 @@ input_number:
     step: 0.1
     initial: 0.5
     icon: mdi:volume-medium
-  
+
   nws_tts_volume_critical:
     name: NWS TTS Volume (Critical Alerts)
     min: 0
@@ -147,7 +147,7 @@ input_select:
       - "None"
     initial: "Severe and Above"
     icon: mdi:bell-ring
-  
+
   nws_tts_targets:
     name: NWS TTS Announcement Locations
     options:
@@ -158,7 +158,7 @@ input_select:
       - "None"
     initial: "Living Room Only"
     icon: mdi:speaker
-  
+
   nws_mobile_devices_critical:
     name: NWS Mobile Devices (Severe & Above)
     options:
@@ -168,7 +168,7 @@ input_select:
       - "None"
     initial: "All Devices"
     icon: mdi:cellphone-sound
-  
+
   nws_mobile_devices_normal:
     name: NWS Mobile Devices (Below Severe)
     options:
@@ -200,7 +200,7 @@ rest:
           {% endif %}
         availability: >
           {{ value_json is defined }}
-        
+
   - resource: https://api.weather.gov/alerts/active?zone=ILZ020,ILC093
     scan_interval: 600
     headers:
@@ -230,7 +230,7 @@ rest:
           - urgency
           - description
           - areaDesc
-          
+
       - name: 'NWS Alert Event 2'
         unique_id: nws_alert_event_2
         value_template: >
@@ -254,7 +254,7 @@ rest:
           - urgency
           - description
           - areaDesc
-          
+
       - name: 'NWS Alert Event 3'
         unique_id: nws_alert_event_3
         value_template: >
@@ -278,7 +278,7 @@ rest:
           - urgency
           - description
           - areaDesc
-          
+
       - name: 'NWS Alert Event 4'
         unique_id: nws_alert_event_4
         value_template: >
@@ -344,7 +344,7 @@ template:
               {% endif %}
             {% endfor %}
             {{ ns.ids }}
-  
+
   - sensor:
       - name: "NWS Alerts Dashboard"
         unique_id: nws_alerts_dashboard
@@ -387,7 +387,7 @@ script:
           expires: "{{ as_timestamp(state_attr(sensor_name, 'expires')) | timestamp_custom('%A, %B %-d at %-I:%M %p') }}"
           tts_target: "{{ states('input_select.nws_tts_targets') }}"
           volume: >
-            {{ states('input_number.nws_tts_volume_critical') | float 
+            {{ states('input_number.nws_tts_volume_critical') | float
                if severity in ['Extreme', 'Severe']
                else states('input_number.nws_tts_volume_normal') | float }}
           target_entities: >
@@ -403,7 +403,7 @@ script:
             {% else %}
               none
             {% endif %}
-      
+
       - if:
           - condition: template
             value_template: "{{ target_entities != 'none' }}"
@@ -414,7 +414,7 @@ script:
               entity_id: "{{ target_entities.split(',') }}"
             data:
               volume_level: "{{ volume }}"
-          
+
           # First announcement
           - action: tts.speak
             target:
@@ -422,10 +422,10 @@ script:
             data:
               media_player_entity_id: "{{ target_entities }}"
               message: "Attention!,,,Attention!,,,A {{ severity }} weather alert has been issued. The National Weather Service has issued a {{ event_type }} for your area. It is in effect from {{ effective }} until {{ expires }}."
-          
+
           # Delay between announcements
           - delay: 00:00:10
-          
+
           # Second announcement
           - action: tts.speak
             target:
@@ -478,7 +478,7 @@ script:
             {% else %}
               none
             {% endif %}
-      
+
       - if:
           - condition: template
             value_template: "{{ target_devices != 'none' }}"
@@ -518,7 +518,7 @@ automation:
             - action: persistent_notification.dismiss
               data:
                 notification_id: "nws_alert_{{ repeat.index }}"
-      
+
       # Clear processed alerts list when no active alerts
       - action: input_text.set_value
         target:
@@ -547,14 +547,14 @@ automation:
           entity_id: input_datetime.nws_last_alert
         data:
           datetime: "{{ now().isoformat() }}"
-      
+
       # Increment alert counter
       - action: input_number.set_value
         target:
           entity_id: input_number.nws_alert_count_total
         data:
           value: "{{ states('input_number.nws_alert_count_total') | int + 1 }}"
-      
+
       # Process each alert
       - repeat:
           for_each:
@@ -615,7 +615,7 @@ automation:
                       {% else %}
                         {{ alert_hash }}
                       {% endif %}
-                
+
                 - parallel:
                     # Create persistent notification with severity icon
                     - action: persistent_notification.create
@@ -623,7 +623,7 @@ automation:
                         notification_id: "nws_alert_{{ event_num }}"
                         title: "{{ severity_icon }} {{ states(sensor_name) }}"
                         message: "{{ description }}"
-                    
+
                     # Handle notifications based on severity and settings
                     - if:
                         - condition: template
@@ -701,7 +701,7 @@ automation:
             - if:
                 - condition: template
                   value_template: >
-                    {{ expires and 
+                    {{ expires and
                        as_timestamp(expires) < now().timestamp() and
                        states(sensor_name) != 'None' }}
               then:
@@ -719,7 +719,7 @@ automation:
           - sensor.nws_alert_event_2
           - sensor.nws_alert_event_3
           - sensor.nws_alert_event_4
-        to: 
+        to:
         not_from:
           - 'None'
           - 'unknown'
@@ -729,11 +729,11 @@ automation:
         data:
           name: "NWS Alert"
           message: >
-            {{ trigger.to_state.state }}: 
-            {{ state_attr(trigger.entity_id, 'severity') | default('Unknown') }} - 
+            {{ trigger.to_state.state }}:
+            {{ state_attr(trigger.entity_id, 'severity') | default('Unknown') }} -
             Expires {{ state_attr(trigger.entity_id, 'expires') }}
           entity_id: "{{ trigger.entity_id }}"
-  
+
   # Handle mobile app action responses
   - alias: 'Handle NWS Alert Actions'
     id: handle_nws_alert_actions

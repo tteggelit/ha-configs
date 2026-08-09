@@ -27,7 +27,7 @@ zone:
   - name: "Des Moines, IA"
     latitude: 41.5909
     longitude: -93.6208
-    radius: 180000  # 180 km 
+    radius: 180000  # 180 km
     icon: mdi:weather-lightning
 
   - name: "Quad Cities, IA"

@@ -19,7 +19,7 @@ esp32:
     type: esp-idf
     advanced:
       sram1_as_iram: true
-  
+
 ota:
   - platform: esphome
     password: !secret ota_password
@@ -46,21 +46,21 @@ wifi:
     password: !secret wifi_ap_password
 
 captive_portal:
-    
+
 esp32_ble:
   max_connections: ${connections}
 
 esp32_ble_tracker:
   scan_parameters:
-    #interval: 1100ms
-    #window: 1100ms
+    # interval: 1100ms
+    # window: 1100ms
     active: true
 
 bluetooth_proxy:
   active: true
   connection_slots: ${connections}
 
-#sensor:
+# sensor:
 #  - platform: b_parasite
 #    mac_address: D6:5E:33:3D:4A:AB
 #    humidity:
