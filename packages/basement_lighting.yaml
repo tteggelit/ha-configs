@@ -134,6 +134,31 @@ script:
     alias: Reset Basement Entertainment lights
     description: ''
 
+  dim_pool_table_area_lights:
+    alias: Dim Pool Table Area Lights
+    description: >-
+      Shared by both "Dim Pool Table Area lights when Pool Table light
+      turns on" and "...if Pool Table light is on" -- whichever of the
+      two lights turns on second, the area lights get dimmed the same way.
+    sequence:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.pool_table_area_lights_previous_value
+        data:
+          value: >-
+            {% if states('light.pool_table_area_light_switch') == 'off' %}
+              0
+            {% else %}
+              {{ (state_attr('light.pool_table_area_light_switch', 'brightness') | int / 255 * 100) | round }}
+            {% endif %}
+      - action: light.turn_on
+        target:
+          entity_id: light.pool_table_area_light_switch
+        data:
+          transition: 4
+          brightness_pct: 15
+    mode: single
+
 switch:
   - platform: flux
     lights:
@@ -482,25 +507,9 @@ automation:
         state:
           - 'on'
     actions:
-      - sequence:
-        - action: input_number.set_value
-          target:
-            entity_id: input_number.pool_table_area_lights_previous_value
-          data:
-            value: >-
-              {% if states('light.pool_table_area_light_switch') == 'off' %}
-                0
-              {% else %}
-                {{ (state_attr('light.pool_table_area_light_switch', 'brightness') | int / 255 * 100) | round }}
-              {% endif %}
-        - action: light.turn_on
-          target:
-            entity_id: light.pool_table_area_light_switch
-          data:
-            transition: 4
-            brightness_pct: 15
+      - action: script.dim_pool_table_area_lights
     mode: single
-  - id: 'reset_pool_table_area_ligths'
+  - id: 'reset_pool_table_area_lights'
     alias: Reset Pool Table Area lights
     description: ''
     triggers:
@@ -537,23 +546,7 @@ automation:
         state:
           - 'on'
     actions:
-      - sequence:
-        - action: input_number.set_value
-          target:
-            entity_id: input_number.pool_table_area_lights_previous_value
-          data:
-            value: >-
-              {% if states('light.pool_table_area_light_switch') == 'off' %}
-                0
-              {% else %}
-                {{ (state_attr('light.pool_table_area_light_switch', 'brightness') | int / 255 * 100) | round }}
-              {% endif %}
-        - action: light.turn_on
-          target:
-            entity_id: light.pool_table_area_light_switch
-          data:
-            transition: 4
-            brightness_pct: 15
+      - action: script.dim_pool_table_area_lights
     mode: single
   - id: 'turn_on_basement_bathroom_lights_with_motion'
     alias: Turn on Basement Bathroom lights with motion

@@ -1,0 +1,174 @@
+# Generic, reusable lighting-control scripts -- not tied to any
+# particular remote brand or input mechanism. Both scripts take
+# entity_id (the light or lights to actually control) and
+# reference_light (a single light to read current color/brightness
+# from) as separate fields, rather than assuming the first entry in
+# entity_id is a valid reference -- when entity_id is a group of lights
+# expected to move together (e.g. a fan with 6 bulbs), the reference
+# light only needs to be *one* representative light from that group,
+# and for a single-light target reference_light and entity_id are just
+# the same light.
+#
+# Used today by ashs_fan_light_remote.yaml, ashs_nightstand_remote.yaml,
+# and playroom_cabinet_lights.yaml's IKEA remote button handlers, but
+# nothing here is IKEA- or remote-specific -- any automation that wants
+# to cycle a light's color or ramp its brightness can call these
+# directly rather than reimplementing this logic.
+
+script:
+  cycle_light_color:
+    alias: Cycle Light Color
+    mode: restart
+    fields:
+      entity_id:
+        description: The light entity (or entities) to control
+        example: light.ash_s_fan_light_1
+      reference_light:
+        description: A single light to read current color state from
+        example: light.ash_s_fan_light_1
+      direction:
+        description: Direction to cycle (forward or backward)
+        example: forward
+    sequence:
+      - variables:
+          current_hs: "{{ state_attr(reference_light, 'hs_color') }}"
+          current_temp: "{{ state_attr(reference_light, 'color_temp') }}"
+          current_mode: "{{ state_attr(reference_light, 'color_mode') }}"
+
+          # Define color sequence with whites
+          colors:
+            - name: red
+              hs: [0, 100]
+            - name: orange
+              hs: [30, 100]
+            - name: yellow
+              hs: [60, 100]
+            - name: green
+              hs: [120, 100]
+            - name: cyan
+              hs: [180, 100]
+            - name: blue
+              hs: [240, 100]
+            - name: purple
+              hs: [280, 100]
+            - name: magenta
+              hs: [320, 100]
+            - name: warm_white
+              color_temp_kelvin: 2700
+            - name: cool_white
+              color_temp_kelvin: 4000
+            - name: bright_white
+              color_temp_kelvin: 5000
+            - name: daylight
+              color_temp_kelvin: 6500
+
+          # Find current index
+          current_index: >
+            {% if current_mode == 'color_temp' %}
+              {% set temp_kelvin = state_attr(reference_light, 'color_temp_kelvin') | int(0) %}
+              {% if temp_kelvin == 0 %}
+                {% set temp_kelvin = (1000000 / (current_temp | int(370))) | int %}
+              {% endif %}
+              {% if temp_kelvin <= 3350 %}8
+              {% elif temp_kelvin <= 4500 %}9
+              {% elif temp_kelvin <= 5500 %}10
+              {% else %}11
+              {% endif %}
+            {% elif current_hs %}
+              {% set hue = current_hs[0] | int %}
+              {% if hue < 15 %}0
+              {% elif hue < 45 %}1
+              {% elif hue < 90 %}2
+              {% elif hue < 150 %}3
+              {% elif hue < 210 %}4
+              {% elif hue < 260 %}5
+              {% elif hue < 300 %}6
+              {% else %}7
+              {% endif %}
+            {% else %}0
+            {% endif %}
+
+          next_index: >
+            {% if direction == 'forward' %}
+              {{ (current_index | int + 1) % 12 }}
+            {% else %}
+              {{ (current_index | int - 1) % 12 }}
+            {% endif %}
+
+      - choose:
+          # RGB colors (indices 0-7)
+          - conditions:
+              - condition: template
+                value_template: "{{ next_index | int < 8 }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  hs_color: "{{ colors[next_index | int].hs }}"
+
+          # White colors (indices 8-11)
+          - conditions:
+              - condition: template
+                value_template: "{{ next_index | int >= 8 }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  color_temp_kelvin: "{{ colors[next_index | int].color_temp_kelvin }}"
+
+  ramp_light_brightness:
+    alias: Ramp Light Brightness
+    mode: restart
+    fields:
+      entity_id:
+        description: The light entity (or entities) to control
+        example: light.ash_s_fan_light_1
+      reference_light:
+        description: A single light to read current brightness from
+        example: light.ash_s_fan_light_1
+      direction:
+        description: up or down
+        example: up
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ direction == 'up' }}"
+            sequence:
+              - repeat:
+                  while:
+                    - condition: template
+                      value_template: >
+                        {{ state_attr(reference_light, 'brightness') | int(0) < 255 }}
+                  sequence:
+                    - action: light.turn_on
+                      target:
+                        entity_id: "{{ entity_id }}"
+                      data:
+                        brightness_step_pct: 10
+                    - delay:
+                        milliseconds: 200
+          - conditions:
+              - condition: template
+                value_template: "{{ direction == 'down' }}"
+            sequence:
+              - repeat:
+                  while:
+                    - condition: template
+                      value_template: >
+                        {{ state_attr(reference_light, 'brightness') | int(0) > 23 }}
+                  sequence:
+                    - action: light.turn_on
+                      target:
+                        entity_id: "{{ entity_id }}"
+                      data:
+                        brightness_step_pct: -10
+                    - delay:
+                        milliseconds: 200
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  brightness_pct: 3

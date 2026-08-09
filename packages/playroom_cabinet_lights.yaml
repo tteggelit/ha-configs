@@ -1,13 +1,22 @@
-# This package consists of an automation to process the button events.
+# This package binds Playroom Cabinet Lights Remote (an IKEA Bilresa) to
+# the playroom cabinet lights. Shared brightness-ramp logic lives in
+# packages/lighting_control.yaml -- see that file for what the script
+# expects.
+#
 # Here are how the button events are processed:
 # Push Up           - Turn light on
 # Push Down         - Turn lights off
 # Hold Up           - Turn up the brightness to a max of 100%
 # Hold Down         - Turn down the brightness to a min of 3%
 #
-# You will need to update the automation to reference the right device_id of the
-# remote and what lights you want to control.
-#
+# To bind a new IKEA Bilresa remote: copy this file's trigger/choose
+# structure (same MQTT payloads: "on"/"off"/"brightness_move_up"/
+# "brightness_move_down"/"brightness_stop"), swap in the new remote's
+# own MQTT topic ("zigbee2mqtt/<friendly name>/action" -- find the
+# friendly name in the Z2M frontend after pairing) and its own
+# target/reference light(s), and call the same shared script. Bilresa
+# remotes have no color-cycle buttons, so there's no equivalent of the
+# Styrbar files' arrow_left_click/arrow_right_click handling.
 
 # Automations
 automation:
@@ -64,46 +73,36 @@ automation:
               - condition: trigger
                 id: brightness_up
             sequence:
-              - repeat:
-                  while:
-                    - condition: template
-                      value_template: >
-                        {{ state_attr('light.playroom_cabinet_lights', 'brightness') | int(0) < 255 }}
-                  sequence:
-                    - action: light.turn_on
-                      target:
-                        entity_id:
-                          - light.playroom_cabinet_lights
-                      data:
-                        brightness_step_pct: 10
-                    - delay:
-                        milliseconds: 200
+              - action: script.ramp_light_brightness
+                data:
+                  entity_id: light.playroom_cabinet_lights
+                  reference_light: light.playroom_cabinet_lights
+                  direction: up
 
           # Brightness down (hold bottom button)
           - conditions:
               - condition: trigger
                 id: brightness_down
             sequence:
-              - repeat:
-                  while:
-                    - condition: template
-                      value_template: >
-                        {{ state_attr('light.playroom_cabinet_lights', 'brightness') | int(0) > 23 }}
-                  sequence:
-                    - action: light.turn_on
-                      target:
-                        entity_id:
-                          - light.playroom_cabinet_lights
-                      data:
-                        brightness_step_pct: -10
-                    - delay:
-                        milliseconds: 200
-              - action: light.turn_on
-                target:
-                  entity_id:
-                    - light.playroom_cabinet_lights
+              - action: script.ramp_light_brightness
                 data:
-                  brightness_pct: 3
+                  entity_id: light.playroom_cabinet_lights
+                  reference_light: light.playroom_cabinet_lights
+                  direction: down
+
+          # Stop ramping (button released). script.ramp_light_brightness
+          # is called directly above, which is a synchronous/blocking
+          # call -- whether cancelling *this* automation (mode: restart)
+          # also stops the still-running *script* isn't clearly
+          # documented, so stop it explicitly rather than relying on
+          # that propagating.
+          - conditions:
+              - condition: trigger
+                id: brightness_stop
+            sequence:
+              - action: script.turn_off
+                target:
+                  entity_id: script.ramp_light_brightness
   - alias: Turn On Playroom Cabinet Lights When A Door Opens
     description: ''
     triggers:

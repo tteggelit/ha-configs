@@ -1,5 +1,8 @@
-# This package consists of a script to cycle through RGB and White colors and
-# an automation to process the button events.
+# This package binds Aidan's Nightstand Light Remote (an IKEA Styrbar)
+# to Aidan's nightstand light. Shared color-cycle/brightness-ramp logic
+# lives in packages/lighting_control.yaml -- see that file for what
+# each script expects.
+#
 # Here are how the button events are processed:
 # Push Up           - Turn light on
 # Push Down         - Turn lights off
@@ -7,117 +10,14 @@
 # Hold Down         - Turn down the brightness to a min of 3%
 # Push Right / Left - Cycle through RGB and White (warm, cool, bright, daylight) colors
 #
-# You will need to update the automation to reference the right device_id of the
-# remote and what lights you want to control.
-#
-# To get the `device_id` of the remote (assuming ZHA), do the following:
-# 1. Pair the remote as normal with ZHA
-# 2. Once paired, go to Developer Tools and select Events
-# 3. Listen for `zha_event` events
-# 4. Push a button on the remote and you should see an event. Copy the `device_id`
+# To bind a new IKEA Styrbar remote: copy this file's trigger/choose
+# structure (same MQTT payloads: "on"/"off"/"brightness_move_up"/
+# "brightness_move_down"/"brightness_stop"/"arrow_left_click"/
+# "arrow_right_click"), swap in the new remote's own MQTT topic
+# ("zigbee2mqtt/<friendly name>/action" -- find the friendly name in
+# the Z2M frontend after pairing) and its own target/reference light(s),
+# and call the same shared scripts.
 
-# Scripts
-script:
-  cycle_ashs_nightstand_light_color:
-    alias: Cycle Aidan's Nightstand Light Color
-    mode: restart
-    fields:
-      entity_id:
-        description: The light entity to control
-        example: light.ash_s_nightstand_light
-      direction:
-        description: Direction to cycle (forward or backward)
-        example: forward
-    sequence:
-      - variables:
-          current_hs: "{{ state_attr(entity_id, 'hs_color') }}"
-          current_temp: "{{ state_attr(entity_id, 'color_temp') }}"
-          current_mode: "{{ state_attr(entity_id, 'color_mode') }}"
-
-          # Define color sequence with whites
-          colors:
-            - name: red
-              hs: [0, 100]
-            - name: orange
-              hs: [30, 100]
-            - name: yellow
-              hs: [60, 100]
-            - name: green
-              hs: [120, 100]
-            - name: cyan
-              hs: [180, 100]
-            - name: blue
-              hs: [240, 100]
-            - name: purple
-              hs: [280, 100]
-            - name: magenta
-              hs: [320, 100]
-            - name: warm_white
-              color_temp_kelvin: 2700
-            - name: cool_white
-              color_temp_kelvin: 4000
-            - name: bright_white
-              color_temp_kelvin: 5000
-            - name: daylight
-              color_temp_kelvin: 6500
-
-          # Find current index
-          current_index: >
-            {% if current_mode == 'color_temp' %}
-              {% set temp_kelvin = state_attr(entity_id, 'color_temp_kelvin') | int(0) %}
-              {% if temp_kelvin == 0 %}
-                {% set temp_kelvin = (1000000 / (current_temp | int(370))) | int %}
-              {% endif %}
-              {% if temp_kelvin <= 3350 %}8
-              {% elif temp_kelvin <= 4500 %}9
-              {% elif temp_kelvin <= 5500 %}10
-              {% else %}11
-              {% endif %}
-            {% elif current_hs %}
-              {% set hue = current_hs[0] | int %}
-              {% if hue < 15 %}0
-              {% elif hue < 45 %}1
-              {% elif hue < 90 %}2
-              {% elif hue < 150 %}3
-              {% elif hue < 210 %}4
-              {% elif hue < 260 %}5
-              {% elif hue < 300 %}6
-              {% else %}7
-              {% endif %}
-            {% else %}0
-            {% endif %}
-
-          next_index: >
-            {% if direction == 'forward' %}
-              {{ (current_index | int + 1) % 12 }}
-            {% else %}
-              {{ (current_index | int - 1) % 12 }}
-            {% endif %}
-
-      - choose:
-          # RGB colors (indices 0-7)
-          - conditions:
-              - condition: template
-                value_template: "{{ next_index | int < 8 }}"
-            sequence:
-              - action: light.turn_on
-                target:
-                  entity_id: "{{ entity_id }}"
-                data:
-                  hs_color: "{{ colors[next_index | int].hs }}"
-
-          # White colors (indices 8-11)
-          - conditions:
-              - condition: template
-                value_template: "{{ next_index | int >= 8 }}"
-            sequence:
-              - action: light.turn_on
-                target:
-                  entity_id: "{{ entity_id }}"
-                data:
-                  color_temp_kelvin: "{{ colors[next_index | int].color_temp_kelvin }}"
-
-# Automations
 automation:
   - alias: Aidan's Nightstand Light Control
     description: Control RGB light with Styrbar remote
@@ -178,52 +78,46 @@ automation:
               - condition: trigger
                 id: brightness_up
             sequence:
-              - repeat:
-                  while:
-                    - condition: template
-                      value_template: >
-                        {{ state_attr('light.ash_s_nightstand_light', 'brightness') | int(0) < 255 }}
-                  sequence:
-                    - action: light.turn_on
-                      target:
-                        entity_id: light.ash_s_nightstand_light
-                      data:
-                        brightness_step_pct: 10
-                    - delay:
-                        milliseconds: 200
+              - action: script.ramp_light_brightness
+                data:
+                  entity_id: light.ash_s_nightstand_light
+                  reference_light: light.ash_s_nightstand_light
+                  direction: up
 
           # Brightness down (hold bottom button)
           - conditions:
               - condition: trigger
                 id: brightness_down
             sequence:
-              - repeat:
-                  while:
-                    - condition: template
-                      value_template: >
-                        {{ state_attr('light.ash_s_nightstand_light', 'brightness') | int(0) > 23 }}
-                  sequence:
-                    - action: light.turn_on
-                      target:
-                        entity_id: light.ash_s_nightstand_light
-                      data:
-                        brightness_step_pct: -10
-                    - delay:
-                        milliseconds: 200
-              - action: light.turn_on
-                target:
-                  entity_id: light.ash_s_nightstand_light
+              - action: script.ramp_light_brightness
                 data:
-                  brightness_pct: 3
+                  entity_id: light.ash_s_nightstand_light
+                  reference_light: light.ash_s_nightstand_light
+                  direction: down
+
+          # Stop ramping (button released). script.ramp_light_brightness
+          # is called directly above, which is a synchronous/blocking
+          # call -- whether cancelling *this* automation (mode: restart)
+          # also stops the still-running *script* isn't clearly
+          # documented, so stop it explicitly rather than relying on
+          # that propagating.
+          - conditions:
+              - condition: trigger
+                id: brightness_stop
+            sequence:
+              - action: script.turn_off
+                target:
+                  entity_id: script.ramp_light_brightness
 
           # Cycle color forward (right arrow)
           - conditions:
               - condition: trigger
                 id: color_right
             sequence:
-              - action: script.cycle_ashs_nightstand_light_color
+              - action: script.cycle_light_color
                 data:
                   entity_id: light.ash_s_nightstand_light
+                  reference_light: light.ash_s_nightstand_light
                   direction: forward
 
           # Cycle color backward (left arrow)
@@ -231,7 +125,8 @@ automation:
               - condition: trigger
                 id: color_left
             sequence:
-              - action: script.cycle_ashs_nightstand_light_color
+              - action: script.cycle_light_color
                 data:
                   entity_id: light.ash_s_nightstand_light
+                  reference_light: light.ash_s_nightstand_light
                   direction: backward
