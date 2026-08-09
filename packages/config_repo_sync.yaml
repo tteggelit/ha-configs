@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Home Assistant Package: Config Repo Sync
+#
+# Keeps .HA_VERSION committed and pushed to the git config repo whenever
+# Home Assistant Core is upgraded, so .github/workflows/validate.yml's
+# config-check step validates against the version actually running here
+# instead of a hand-maintained, easily-stale pin.
+#
+# Runs scripts/commit_ha_version.sh on every HA start via shell_command.
+# That script only ever touches .HA_VERSION (git add is scoped to that one
+# path, so it can never sweep up other in-progress/uncommitted work on
+# this host) and only commits when the content actually changed -- most
+# starts are a same-version restart and are a no-op.
+#
+# Pushes using a dedicated, repo-scoped GitHub Deploy Key rather than the
+# personal SSH-agent-forwarded credentials used for manual pushes from
+# this host -- see scripts/commit_ha_version.sh for the one-time setup
+# that key needs (not automated here on purpose, since it grants a new
+# persistent write credential).
+# ─────────────────────────────────────────────────────────────────────────────
+
+shell_command:
+  commit_ha_version: "bash /config/scripts/commit_ha_version.sh"
+
+automation:
+  - id: config_repo_sync_commit_ha_version
+    alias: "Config Repo Sync — Commit .HA_VERSION on change"
+    description: >
+      Commits and pushes .HA_VERSION after every HA start if Core was
+      upgraded. Raises a persistent notification if the push fails (e.g.
+      host offline, or diverged from origin) so it doesn't fail silently
+      -- the commit itself already succeeded locally in that case, so
+      nothing is lost, it just needs reconciling by hand.
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: shell_command.commit_ha_version
+        response_variable: commit_result
+      - if:
+          - condition: template
+            value_template: "{{ commit_result.returncode != 0 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              title: ".HA_VERSION push failed"
+              message: >
+                scripts/commit_ha_version.sh exited {{ commit_result.returncode }}.
+
+                {{ commit_result.stderr }}
+
+                Reconcile manually: SSH in, `git pull`, then re-run the
+                script or push by hand.
+              notification_id: config_repo_sync_ha_version_push_failed
+    mode: single

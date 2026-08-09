@@ -88,7 +88,12 @@ CHECK_STATUS=$?
 # looks for configuration.yaml under /root/.homeassistant instead of
 # /config on some HAOS releases (home-assistant/core#156294). If that's
 # the case on this host, fall back to checking the Core container
-# directly. This requires the SSH add-on to have Docker socket access.
+# directly. This requires `docker exec` to work from wherever this script
+# runs, which needs the Advanced SSH & Web Terminal add-on's Protection
+# Mode turned OFF (it's ON by default, and intentionally so -- disabling
+# it grants that add-on Docker socket access to the whole host). Leave
+# Protection Mode on by default and only disable it on demand if this
+# fallback actually gets hit.
 if echo "$CHECK_OUTPUT" | grep -qi "configuration.yaml not found"; then
   echo "ha core check appears to have hit the known /root/.homeassistant path bug -- falling back to a direct check inside the Core container." >&2
   CHECK_OUTPUT="$(docker exec homeassistant python3 -m homeassistant --script check_config -c /config 2>&1)"

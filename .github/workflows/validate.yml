@@ -40,13 +40,12 @@ jobs:
         with:
           path: "."
           secrets: "./secrets.yaml.example"
-          # Pinned to the version actually running on the live host so
-          # this reflects reality rather than silently tracking whatever
-          # is newest upstream. .HA_VERSION is host-local/gitignored, so
-          # it can't be auto-detected here -- update this whenever the
-          # host is upgraded (check via the Settings > About page or
-          # `ha core info` over SSH).
-          version: "2026.7.0"
+          # No `version:` input on purpose: the action auto-detects it
+          # from a committed .HA_VERSION file, which packages/config_repo_
+          # sync.yaml keeps in sync with whatever the live host is
+          # actually running (see that package for how). Until .HA_VERSION
+          # has been committed at least once, this falls back to the
+          # action's own default (latest stable).
 
       - name: Set up ESPHome secrets
         run: cp secrets.yaml.example esphome/secrets.yaml

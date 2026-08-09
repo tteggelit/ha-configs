@@ -1,4 +1,3 @@
-.HA_VERSION
 .cache
 .cloud
 .ha_run.lock
@@ -18,3 +17,8 @@ image
 tts
 zigbee2mqtt/coordinator_backup.json
 zigbee2mqtt/state.json
+
+# Private deploy key used only by scripts/commit_ha_version.sh (see
+# packages/config_repo_sync.yaml) to push .HA_VERSION bumps. Scoped to
+# this repo only via a GitHub Deploy Key -- never commit the private key.
+.ssh/
