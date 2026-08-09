@@ -1,7 +1,0 @@
-advanced:
-  channel: 25
-  pan_id: 6699
-  network_key: GENERATE
-
-permit_join: false
-homeassistant: false
