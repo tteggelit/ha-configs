@@ -328,21 +328,21 @@ automation:
     alias: "Humidity Controller Fetch Weather Forecast"
     description: "Retrieves weather forecast and stores for humidity calculations"
     mode: single
-    trigger:
-      - platform: time_pattern
+    triggers:
+      - trigger: time_pattern
         hours: "/1"
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
-      - platform: state
+      - trigger: state
         entity_id: input_number.humidity_controller_forecast_days
-    action:
-      - service: weather.get_forecasts
+    actions:
+      - action: weather.get_forecasts
         data:
           type: daily
         target:
           entity_id: "{{ states('input_text.humidity_controller_weather_entity') }}"
         response_variable: forecast_data
-      - service: input_text.set_value
+      - action: input_text.set_value
         target:
           entity_id: input_text.humidity_controller_forecast_data
         data:
@@ -357,16 +357,16 @@ automation:
     alias: "Humidity Controller Update Last Target"
     description: "Stores the current target for rate limiting calculations"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: sensor.humidity_controller_target_humidity_level
         to: ~
-    condition:
+    conditions:
       - condition: template
         value_template: >
           {{ trigger.to_state is not none and trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
-    action:
-      - service: input_number.set_value
+    actions:
+      - action: input_number.set_value
         target:
           entity_id: input_number.humidity_controller_last_target
         data:
@@ -376,13 +376,13 @@ automation:
     alias: "Humidity Controller Update Current Target"
     description: "Adjusts humidity based on forecasted lows and surface temperature"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: sensor.humidity_controller_target_humidity_level
         to: ~
-      - platform: time_pattern
+      - trigger: time_pattern
         hours: "/1"
-    condition:
+    conditions:
       - condition: template
         value_template: >
           {{ states('sensor.humidity_controller_target_humidity_level') not in ['unavailable', 'unknown', 'none'] }}
@@ -394,13 +394,13 @@ automation:
           {% set current = state_attr(states('input_text.humidity_controller_humidifier_entity'), 'humidity') | int(0) %}
           {% set target = states('sensor.humidity_controller_target_humidity_level') | int(0) %}
           {{ current != target }}
-    action:
-      - service: humidifier.set_humidity
+    actions:
+      - action: humidifier.set_humidity
         target:
           entity_id: "{{ states('input_text.humidity_controller_humidifier_entity') }}"
         data:
           humidity: "{{ states('sensor.humidity_controller_target_humidity_level') | int(35) }}"
-      - service: system_log.write
+      - action: system_log.write
         data:
           message: >
             Humidity updated to {{ states('sensor.humidity_controller_target_humidity_level') }}%
@@ -414,11 +414,11 @@ automation:
     alias: "Humidity Controller Notify Change"
     description: "Send notification when humidity target changes significantly"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: sensor.humidity_controller_target_humidity_level
         to: ~
-    condition:
+    conditions:
       - condition: template
         value_template: >
           {{ trigger.to_state is not none and trigger.to_state.state not in ['unavailable', 'unknown', 'none'] }}
@@ -428,8 +428,8 @@ automation:
       - condition: template
         value_template: >
           {{ (trigger.to_state.state | int(0) - trigger.from_state.state | int(0)) | abs >= 5 }}
-    action:
-      - service: persistent_notification.create
+    actions:
+      - action: persistent_notification.create
         data:
           title: "Humidity Adjusted"
           message: >

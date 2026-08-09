@@ -229,21 +229,21 @@ template:
   # throwing template errors in every downstream consumer.
   # ===========================================================================
 
-  - trigger:
+  - triggers:
       - trigger: time_pattern
         hours: "/1"
       - trigger: homeassistant
         event: start
       - trigger: state
         entity_id: input_button.irrigation_refresh_forecast_cache
-    action:
+    actions:
       - if:
           - condition: template
             value_template: "{{ trigger.platform == 'homeassistant' }}"
         then:
           - delay:
               seconds: 45
-      - service: weather.get_forecasts
+      - action: weather.get_forecasts
         target:
           entity_id: weather.klot
         data:
@@ -328,21 +328,21 @@ template:
           precip_48h: "{{ nws_precip_48h_calc | float(0) }}"
           imminent_heavy_rain_24h: "{{ nws_imminent_heavy_rain_calc }}"
 
-  - trigger:
+  - triggers:
       - trigger: time_pattern
         hours: "/1"
       - trigger: homeassistant
         event: start
       - trigger: state
         entity_id: input_button.irrigation_refresh_forecast_cache
-    action:
+    actions:
       - if:
           - condition: template
             value_template: "{{ trigger.platform == 'homeassistant' }}"
         then:
           - delay:
               seconds: 45
-      - service: weather.get_forecasts
+      - action: weather.get_forecasts
         target:
           entity_id: weather.forecast_home
         data:
@@ -955,11 +955,11 @@ script:
                 entity_id: script.back_vegetable_garden_irrigation
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.irrigation_cancel
         default:
-          - service: script.turn_on
+          - action: script.turn_on
             target:
               entity_id: script.back_vegetable_garden_irrigation
     mode: single
@@ -974,11 +974,11 @@ script:
                 entity_id: script.side_vegetable_garden_irrigation
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.irrigation_cancel
         default:
-          - service: script.turn_on
+          - action: script.turn_on
             target:
               entity_id: script.side_vegetable_garden_irrigation
     mode: single
@@ -993,11 +993,11 @@ script:
                 entity_id: script.front_garden_irrigation
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.irrigation_cancel
         default:
-          - service: script.turn_on
+          - action: script.turn_on
             target:
               entity_id: script.front_garden_irrigation
     mode: single
@@ -1095,7 +1095,7 @@ automation:
             entity_id: input_boolean.irrigation_debug
             state: "on"
         then:
-          - service: logbook.log
+          - action: logbook.log
             data:
               name: "Irrigation Debug"
               message: >
@@ -1128,7 +1128,7 @@ automation:
             entity_id: input_boolean.irrigation_debug
             state: "on"
         then:
-          - service: logbook.log
+          - action: logbook.log
             data:
               name: "Irrigation Debug"
               message: >
@@ -1142,40 +1142,40 @@ automation:
               - condition: template
                 value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
                     last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
                     full 3-cycle run.
                   level: warning
-              - service: script.back_vegetable_garden_irrigation
+              - action: script.back_vegetable_garden_irrigation
                 data: {}
           # Normal path — urgency >= 2: full run
           - conditions:
               - condition: template
                 value_template: "{{ urgency >= 2 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     full 3-cycle run.
                   level: warning
-              - service: script.back_vegetable_garden_irrigation
+              - action: script.back_vegetable_garden_irrigation
                 data: {}
           # Normal path — urgency == 1: reduced run
           - conditions:
               - condition: template
                 value_template: "{{ urgency == 1 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     reduced 2-cycle run.
                   level: info
-              - service: script.back_vegetable_garden_irrigation
+              - action: script.back_vegetable_garden_irrigation
                 data:
                   num_cycles: 2
     mode: single
@@ -1259,7 +1259,7 @@ automation:
             entity_id: input_boolean.irrigation_debug
             state: "on"
         then:
-          - service: logbook.log
+          - action: logbook.log
             data:
               name: "Irrigation Debug"
               message: >
@@ -1290,7 +1290,7 @@ automation:
             entity_id: input_boolean.irrigation_debug
             state: "on"
         then:
-          - service: logbook.log
+          - action: logbook.log
             data:
               name: "Irrigation Debug"
               message: >
@@ -1304,40 +1304,40 @@ automation:
               - condition: template
                 value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
                     last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
                     full 3-cycle run.
                   level: warning
-              - service: script.side_vegetable_garden_irrigation
+              - action: script.side_vegetable_garden_irrigation
                 data: {}
           # Normal path — urgency >= 2: full run
           - conditions:
               - condition: template
                 value_template: "{{ urgency >= 2 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     full 3-cycle run.
                   level: warning
-              - service: script.side_vegetable_garden_irrigation
+              - action: script.side_vegetable_garden_irrigation
                 data: {}
           # Normal path — urgency == 1: reduced run
           - conditions:
               - condition: template
                 value_template: "{{ urgency == 1 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     reduced 2-cycle run.
                   level: info
-              - service: script.side_vegetable_garden_irrigation
+              - action: script.side_vegetable_garden_irrigation
                 data:
                   num_cycles: 2
     mode: single
@@ -1421,7 +1421,7 @@ automation:
             entity_id: input_boolean.irrigation_debug
             state: "on"
         then:
-          - service: logbook.log
+          - action: logbook.log
             data:
               name: "Irrigation Debug"
               message: >
@@ -1452,7 +1452,7 @@ automation:
             entity_id: input_boolean.irrigation_debug
             state: "on"
         then:
-          - service: logbook.log
+          - action: logbook.log
             data:
               name: "Irrigation Debug"
               message: >
@@ -1466,40 +1466,40 @@ automation:
               - condition: template
                 value_template: "{{ overdue and rain_factor | int(0) < 2 and urgency < 1 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} overdue ({{ hours_since_watered }}h since
                     last watered, urgency={{ urgency }}, rain_factor={{ rain_factor }}) —
                     full 3-cycle run.
                   level: warning
-              - service: script.front_garden_irrigation
+              - action: script.front_garden_irrigation
                 data: {}
           # Normal path — urgency >= 2: full run
           - conditions:
               - condition: template
                 value_template: "{{ urgency >= 2 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     full 3-cycle run.
                   level: warning
-              - service: script.front_garden_irrigation
+              - action: script.front_garden_irrigation
                 data: {}
           # Normal path — urgency == 1: reduced run
           - conditions:
               - condition: template
                 value_template: "{{ urgency == 1 }}"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation: {{ zone }} urgency {{ urgency }} —
                     reduced 2-cycle run.
                   level: info
-              - service: script.front_garden_irrigation
+              - action: script.front_garden_irrigation
                 data:
                   num_cycles: 2
     mode: single
@@ -1516,7 +1516,7 @@ automation:
         from: "on"
         to: "off"
     actions:
-      - service: input_datetime.set_datetime
+      - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.back_garden_last_watered
         data:
@@ -1531,7 +1531,7 @@ automation:
         from: "on"
         to: "off"
     actions:
-      - service: input_datetime.set_datetime
+      - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.side_garden_last_watered
         data:
@@ -1546,7 +1546,7 @@ automation:
         from: "on"
         to: "off"
     actions:
-      - service: input_datetime.set_datetime
+      - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.front_garden_last_watered
         data:
@@ -1569,7 +1569,7 @@ automation:
                 value_template: >
                   {{ states('input_number.irrigation_pause_days') | int(0) > 0 }}
             sequence:
-              - service: input_datetime.set_datetime
+              - action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.irrigation_pause_until
                 data:
@@ -1577,7 +1577,7 @@ automation:
                     {{ (now() + timedelta(
                         days=states('input_number.irrigation_pause_days') | int(1)
                       )).strftime('%Y-%m-%d %H:%M:%S') }}
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Irrigation paused for
@@ -1590,7 +1590,7 @@ automation:
                 value_template: >
                   {{ states('input_number.irrigation_pause_days') | int(0) == 0 }}
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: "Irrigation pause cleared — normal scheduling resumed."
                   level: info
@@ -1612,12 +1612,12 @@ automation:
              and now() >= states('input_datetime.irrigation_pause_until')
                 | as_datetime | as_local }}
     actions:
-      - service: input_number.set_value
+      - action: input_number.set_value
         target:
           entity_id: input_number.irrigation_pause_days
         data:
           value: 0
-      - service: system_log.write
+      - action: system_log.write
         data:
           message: "Irrigation pause expired — normal scheduling resumed."
           level: info
@@ -1649,10 +1649,10 @@ automation:
           {{ state_attr('sensor.irrigation_nws_forecast_cache', 'imminent_heavy_rain_24h') == true
              and state_attr('sensor.irrigation_met_no_forecast_cache', 'imminent_heavy_rain_24h') == true }}
     actions:
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.rain_delay_active
-      - service: system_log.write
+      - action: system_log.write
         data:
           message: >
             Rain delay activated — both NWS and Met.no forecast >80% / >0.5"
@@ -1660,10 +1660,10 @@ automation:
           level: info
       - delay:
           hours: 24
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.rain_delay_active
-      - service: system_log.write
+      - action: system_log.write
         data:
           message: "Rain delay cleared — normal irrigation scheduling resumed."
           level: info
@@ -1710,20 +1710,20 @@ automation:
                 entity_id: input_boolean.irrigation_running
                 state: "on"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Scheduled run: Back Garden skipped — another zone is
                     already running. Reschedule if needed.
                   level: warning
         default:
-          - service: system_log.write
+          - action: system_log.write
             data:
               message: "Scheduled run: Back Garden starting."
               level: info
-          - service: script.back_vegetable_garden_irrigation
+          - action: script.back_vegetable_garden_irrigation
             data: {}
-      - service: input_datetime.set_datetime
+      - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.back_garden_scheduled_run
         data:
@@ -1753,20 +1753,20 @@ automation:
                 entity_id: input_boolean.irrigation_running
                 state: "on"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Scheduled run: Side Garden skipped — another zone is
                     already running. Reschedule if needed.
                   level: warning
         default:
-          - service: system_log.write
+          - action: system_log.write
             data:
               message: "Scheduled run: Side Garden starting."
               level: info
-          - service: script.side_vegetable_garden_irrigation
+          - action: script.side_vegetable_garden_irrigation
             data: {}
-      - service: input_datetime.set_datetime
+      - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.side_garden_scheduled_run
         data:
@@ -1796,20 +1796,20 @@ automation:
                 entity_id: input_boolean.irrigation_running
                 state: "on"
             sequence:
-              - service: system_log.write
+              - action: system_log.write
                 data:
                   message: >
                     Scheduled run: Front Garden skipped — another zone is
                     already running. Reschedule if needed.
                   level: warning
         default:
-          - service: system_log.write
+          - action: system_log.write
             data:
               message: "Scheduled run: Front Garden starting."
               level: info
-          - service: script.front_garden_irrigation
+          - action: script.front_garden_irrigation
             data: {}
-      - service: input_datetime.set_datetime
+      - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.front_garden_scheduled_run
         data:
@@ -1885,27 +1885,27 @@ automation:
                and total | int(0) > 0 }}
 
       # ── Defensively close every zone valve (CONFIGURE entity IDs) ─────────
-      - service: valve.close_valve
+      - action: valve.close_valve
         target:
           entity_id: valve.back_vegetable_garden_timer_zone
         continue_on_error: true
-      - service: valve.close_valve
+      - action: valve.close_valve
         target:
           entity_id: valve.vegetable_garden_timer_vegetable_garden_zone
         continue_on_error: true
-      - service: switch.turn_off
+      - action: switch.turn_off
         target:
           entity_id: switch.front_garden_faucet_valve
         continue_on_error: true
 
       # ── Clear stale state ─────────────────────────────────────────────────
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.irrigation_running
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.irrigation_cancel
-      - service: input_number.set_value
+      - action: input_number.set_value
         target:
           entity_id: input_number.irrigation_cycle_counter
         data:
@@ -1924,7 +1924,7 @@ automation:
                   - condition: template
                     value_template: "{{ zone == 'Back Vegetable Garden' }}"
                 sequence:
-                  - service: input_datetime.set_datetime
+                  - action: input_datetime.set_datetime
                     target:
                       entity_id: input_datetime.back_garden_last_watered
                     data:
@@ -1933,7 +1933,7 @@ automation:
                   - condition: template
                     value_template: "{{ zone == 'Side Vegetable Garden' }}"
                 sequence:
-                  - service: input_datetime.set_datetime
+                  - action: input_datetime.set_datetime
                     target:
                       entity_id: input_datetime.side_garden_last_watered
                     data:
@@ -1942,14 +1942,14 @@ automation:
                   - condition: template
                     value_template: "{{ zone == 'Front Garden' }}"
                 sequence:
-                  - service: input_datetime.set_datetime
+                  - action: input_datetime.set_datetime
                     target:
                       entity_id: input_datetime.front_garden_last_watered
                     data:
                       datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
       # ── Log and notify ────────────────────────────────────────────────────
-      - service: logbook.log
+      - action: logbook.log
         data:
           name: "Irrigation Recovery"
           entity_id: input_boolean.irrigation_running
@@ -1968,7 +1968,7 @@ automation:
           for_each: >
             {{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') or [] }}
           sequence:
-            - service: notify.send_message
+            - action: notify.send_message
               target:
                 entity_id: "{{ repeat.item }}"
               data:
@@ -1983,12 +1983,12 @@ automation:
                      if resume else 'Auto-resume is off — re-run manually if needed.' }}
 
       # ── Clear run metadata, then optionally resume ────────────────────────
-      - service: input_text.set_value
+      - action: input_text.set_value
         target:
           entity_id: input_text.irrigation_active_zone
         data:
           value: ""
-      - service: input_number.set_value
+      - action: input_number.set_value
         target:
           entity_id: input_number.irrigation_total_cycles
         data:
@@ -2002,21 +2002,21 @@ automation:
                   - condition: template
                     value_template: "{{ zone == 'Back Vegetable Garden' }}"
                 sequence:
-                  - service: script.back_vegetable_garden_irrigation
+                  - action: script.back_vegetable_garden_irrigation
                     data:
                       num_cycles: "{{ remaining | int(1) }}"
               - conditions:
                   - condition: template
                     value_template: "{{ zone == 'Side Vegetable Garden' }}"
                 sequence:
-                  - service: script.side_vegetable_garden_irrigation
+                  - action: script.side_vegetable_garden_irrigation
                     data:
                       num_cycles: "{{ remaining | int(1) }}"
               - conditions:
                   - condition: template
                     value_template: "{{ zone == 'Front Garden' }}"
                 sequence:
-                  - service: script.front_garden_irrigation
+                  - action: script.front_garden_irrigation
                     data:
                       num_cycles: "{{ remaining | int(1) }}"
     mode: single
@@ -2041,7 +2041,7 @@ automation:
       - repeat:
           for_each: "{{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') }}"
           sequence:
-            - service: notify.send_message
+            - action: notify.send_message
               target:
                 entity_id: "{{ repeat.item }}"
               data:
@@ -2066,7 +2066,7 @@ automation:
       - repeat:
           for_each: "{{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') }}"
           sequence:
-            - service: notify.send_message
+            - action: notify.send_message
               target:
                 entity_id: "{{ repeat.item }}"
               data:
@@ -2091,7 +2091,7 @@ automation:
       - repeat:
           for_each: "{{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') }}"
           sequence:
-            - service: notify.send_message
+            - action: notify.send_message
               target:
                 entity_id: "{{ repeat.item }}"
               data:

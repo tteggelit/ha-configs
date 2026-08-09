@@ -296,8 +296,8 @@ rest:
 
 # Template sensors for summary and dashboard
 template:
-  - trigger:
-      - platform: state
+  - triggers:
+      - trigger: state
         entity_id:
           - sensor.nws_alert_event_1
           - sensor.nws_alert_event_2

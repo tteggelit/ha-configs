@@ -14,51 +14,51 @@ automation:
   - alias: Playroom Cabinet Lights Control
     description: Control lights with IKEA Bilresa remote
     mode: restart
-    trigger:
-      - platform: mqtt
+    triggers:
+      - trigger: mqtt
         topic: "zigbee2mqtt/Playroom Cabinet Lights Remote/action"
         payload: "on"
         id: button_on
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Playroom Cabinet Lights Remote/action"
         payload: "off"
         id: button_off
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Playroom Cabinet Lights Remote/action"
         payload: "brightness_move_up"
         id: brightness_up
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Playroom Cabinet Lights Remote/action"
         payload: "brightness_move_down"
         id: brightness_down
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Playroom Cabinet Lights Remote/action"
         payload: "brightness_stop"
         id: brightness_stop
-    action:
+    actions:
       - choose:
           # Turn on light
           - conditions:
               - condition: trigger
                 id: button_on
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id:
                     - light.playroom_cabinet_lights
                 data:
                   brightness_pct: 100
-          
+
           # Turn off light
           - conditions:
               - condition: trigger
                 id: button_off
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 target:
                   entity_id:
                     - light.playroom_cabinet_lights
-          
+
           # Brightness up (hold top button)
           - conditions:
               - condition: trigger
@@ -70,7 +70,7 @@ automation:
                       value_template: >
                         {{ state_attr('light.playroom_cabinet_lights', 'brightness') | int(0) < 255 }}
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id:
                           - light.playroom_cabinet_lights
@@ -78,7 +78,7 @@ automation:
                         brightness_step_pct: 10
                     - delay:
                         milliseconds: 200
-          
+
           # Brightness down (hold bottom button)
           - conditions:
               - condition: trigger
@@ -90,7 +90,7 @@ automation:
                       value_template: >
                         {{ state_attr('light.playroom_cabinet_lights', 'brightness') | int(0) > 23 }}
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id:
                           - light.playroom_cabinet_lights
@@ -98,7 +98,7 @@ automation:
                         brightness_step_pct: -10
                     - delay:
                         milliseconds: 200
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id:
                     - light.playroom_cabinet_lights

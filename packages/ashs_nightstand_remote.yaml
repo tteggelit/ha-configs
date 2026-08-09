@@ -33,7 +33,7 @@ script:
           current_hs: "{{ state_attr(entity_id, 'hs_color') }}"
           current_temp: "{{ state_attr(entity_id, 'color_temp') }}"
           current_mode: "{{ state_attr(entity_id, 'color_mode') }}"
-          
+
           # Define color sequence with whites
           colors:
             - name: red
@@ -60,7 +60,7 @@ script:
               color_temp_kelvin: 5000
             - name: daylight
               color_temp_kelvin: 6500
-          
+
           # Find current index
           current_index: >
             {% if current_mode == 'color_temp' %}
@@ -86,32 +86,32 @@ script:
               {% endif %}
             {% else %}0
             {% endif %}
-          
+
           next_index: >
             {% if direction == 'forward' %}
               {{ (current_index | int + 1) % 12 }}
             {% else %}
               {{ (current_index | int - 1) % 12 }}
             {% endif %}
-      
+
       - choose:
           # RGB colors (indices 0-7)
           - conditions:
               - condition: template
                 value_template: "{{ next_index | int < 8 }}"
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id: "{{ entity_id }}"
                 data:
                   hs_color: "{{ colors[next_index | int].hs }}"
-          
+
           # White colors (indices 8-11)
           - conditions:
               - condition: template
                 value_template: "{{ next_index | int >= 8 }}"
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id: "{{ entity_id }}"
                 data:
@@ -122,57 +122,57 @@ automation:
   - alias: Aidan's Nightstand Light Control
     description: Control RGB light with Styrbar remote
     mode: restart
-    trigger:
-      - platform: mqtt
+    triggers:
+      - trigger: mqtt
         topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
         payload: "on"
         id: button_on
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
         payload: "off"
         id: button_off
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
         payload: "brightness_move_up"
         id: brightness_up
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
         payload: "brightness_move_down"
         id: brightness_down
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
         payload: "brightness_stop"
         id: brightness_stop
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
         payload: "arrow_left_click"
         id: color_left
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
         payload: "arrow_right_click"
         id: color_right
-    action:
+    actions:
       - choose:
           # Turn on light
           - conditions:
               - condition: trigger
                 id: button_on
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id: light.ash_s_nightstand_light
                 data:
                   brightness_pct: 100
-          
+
           # Turn off light
           - conditions:
               - condition: trigger
                 id: button_off
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 target:
                   entity_id: light.ash_s_nightstand_light
-          
+
           # Brightness up (hold top button)
           - conditions:
               - condition: trigger
@@ -184,14 +184,14 @@ automation:
                       value_template: >
                         {{ state_attr('light.ash_s_nightstand_light', 'brightness') | int(0) < 255 }}
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: light.ash_s_nightstand_light
                       data:
                         brightness_step_pct: 10
                     - delay:
                         milliseconds: 200
-          
+
           # Brightness down (hold bottom button)
           - conditions:
               - condition: trigger
@@ -203,35 +203,35 @@ automation:
                       value_template: >
                         {{ state_attr('light.ash_s_nightstand_light', 'brightness') | int(0) > 23 }}
                   sequence:
-                    - service: light.turn_on
+                    - action: light.turn_on
                       target:
                         entity_id: light.ash_s_nightstand_light
                       data:
                         brightness_step_pct: -10
                     - delay:
                         milliseconds: 200
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id: light.ash_s_nightstand_light
                 data:
                   brightness_pct: 3
-          
+
           # Cycle color forward (right arrow)
           - conditions:
               - condition: trigger
                 id: color_right
             sequence:
-              - service: script.cycle_ashs_nightstand_light_color
+              - action: script.cycle_ashs_nightstand_light_color
                 data:
                   entity_id: light.ash_s_nightstand_light
                   direction: forward
-          
+
           # Cycle color backward (left arrow)
           - conditions:
               - condition: trigger
                 id: color_left
             sequence:
-              - service: script.cycle_ashs_nightstand_light_color
+              - action: script.cycle_ashs_nightstand_light_color
                 data:
                   entity_id: light.ash_s_nightstand_light
                   direction: backward

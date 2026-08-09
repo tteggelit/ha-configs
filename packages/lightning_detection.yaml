@@ -92,58 +92,58 @@ automation:
     description: >-
       Sends tiered alerts for approaching lightning, but only if the forecast
       shows a >50% chance of thunderstorms in the next 4 hours.
-    trigger:
+    triggers:
       # === WEST ===
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.des_moines_lightning_distance
         below: 180
         id: 'des_moines'
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.quad_cities_lightning_distance
         below: 70
         id: 'quad_cities'
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.dixon_lightning_distance
         below: 40
         id: 'dixon'
 
       # === SOUTHWEST ===
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.st_louis_lightning_distance
         below: 180
         id: 'st_louis'
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.springfield_lightning_distance
         below: 70
         id: 'springfield'
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.pontiac_lightning_distance
         below: 40
         id: 'pontiac'
 
       # === NORTHWEST ===
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.minneapolis_lightning_distance
         below: 180
         id: 'minneapolis'
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.la_crosse_lightning_distance
         below: 70
         id: 'la_crosse'
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.platteville_lightning_distance
         below: 70
         id: 'platteville'
 
       # === HOME ===
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.home_lightning_distance
         below: 25
         id: 'oswego'
 
-    action:
+    actions:
       # Step 1: Get the forecast
-      - service: weather.get_forecasts
+      - action: weather.get_forecasts
         target:
           entity_id: weather.openweathermap
         data:
@@ -176,7 +176,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_west_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Distant Storm Warning (Des Moines, IA)"
                         message: "Confirmed storm w/ lightning near Des Moines, IA, moving east. Estimated arrival in 4-6 hours. Time for meds!"
@@ -187,13 +187,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_west_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near Des Moines, IA. Forecast confirmed."
@@ -209,7 +209,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_west_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Approaching Storm (Quad Cities, IA)"
                         message: "Confirmed storm w/ lightning near the Quad Cities, IA, moving east. Estimated arrival in 2-3 hours."
@@ -220,13 +220,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_west_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near Quad Cities, IA. Forecast confirmed."
@@ -242,7 +242,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_west_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Nearby Storm (Dixon, IL)"
                         message: "Confirmed storm w/ lightning near Dixon, IL. Estimated arrival in about 1 hour."
@@ -253,13 +253,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_west_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near Dixon, IL. Forecast confirmed."
@@ -275,7 +275,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_southwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Distant Storm Warning (St. Louis, MO)"
                         message: "Confirmed storm w/ lightning near St. Louis, MO, moving northeast. Estimated arrival in 3-5 hours. Time for meds!"
@@ -286,13 +286,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_southwest_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near St. Louis, MO. Forecast confirmed."
@@ -308,7 +308,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_southwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Approaching Storm (Springfield, IL)"
                         message: "Confirmed storm w/ lightning near Springfield, IL, moving northeast. Estimated arrival in 1.5-2.5 hours."
@@ -319,13 +319,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_southwest_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near Springfield, IL. Forecast confirmed."
@@ -341,7 +341,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_southwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Nearby Storm (Pontiac, IL)"
                         message: "Confirmed storm w/ lightning near Pontiac, IL. Estimated arrival in about 45 minutes."
@@ -352,13 +352,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_southwest_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near Pontiac, IL. Forecast confirmed."
@@ -374,7 +374,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_northwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Distant Storm Warning (Minneapolis, MN)"
                         message: "Confirmed storm w/ lightning near Minneapolis, MN, moving southeast. Estimated arrival in 4-6 hours. Time for meds!"
@@ -385,13 +385,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_northwest_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near Minneapolis, MN. Forecast confirmed."
@@ -407,7 +407,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_northwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Approaching Storm (La Crosse, WI)"
                         message: "Confirmed storm w/ lightning over La Crosse, WI, moving southeast. Estimated arrival in 2-3 hours."
@@ -418,13 +418,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_northwest_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near La Crosse, WI. Forecast confirmed."
@@ -440,7 +440,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_northwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "Nearby Storm (Platteville, WI)"
                         message: "Confirmed storm w/ lightning near Platteville, WI. Estimated arrival in about 1 hour."
@@ -451,13 +451,13 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_northwest_alert
                       data:
                         time: "{{ now().strftime('%H:%M:%S') }}"
                     # Log the event
-                    - service: logbook.log
+                    - action: logbook.log
                       data:
                         name: Thunderstorm Alert
                         message: "Storm detected near Platteville, WI. Forecast confirmed."
@@ -473,7 +473,7 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_home_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - service: notify.mobile_app_tis_iphone
+                    - action: notify.mobile_app_tis_iphone
                       data:
                         title: "⚡ Thunderstorm Starting!"
                         message: "Lightning detected within 25 km. The storm is here."
@@ -484,7 +484,7 @@ automation:
                               critical: 1
                               volume: 1
                     # Set the last triggered time
-                    - service: input_datetime.set_datetime
+                    - action: input_datetime.set_datetime
                       target:
                         entity_id: input_datetime.lightning_detection_last_home_alert
                       data:

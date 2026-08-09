@@ -113,14 +113,14 @@
 - id: '1704080363630'
   alias: Turn On Master Closet Light
   description: Turn on master closet light when motion is detected
-  trigger:
-  - platform: state
+  triggers:
+  - trigger: state
     entity_id:
     - binary_sensor.master_closet_light_motion_detection
     to: 'on'
-  condition: []
-  action:
-  - service: switch.turn_on
+  conditions: []
+  actions:
+  - action: switch.turn_on
     metadata: {}
     data: {}
     target:
@@ -149,13 +149,13 @@
 - id: '1704080588094'
   alias: Carriage Lights - Turn On
   description: Turn on carriage lights at sunset
-  trigger:
-  - platform: sun
+  triggers:
+  - trigger: sun
     event: sunset
     offset: 0
-  condition: []
-  action:
-  - service: switch.turn_on
+  conditions: []
+  actions:
+  - action: switch.turn_on
     metadata: {}
     data: {}
     target:
@@ -164,13 +164,13 @@
 - id: '1704080632778'
   alias: Carriage Lights - Turn Off
   description: Turn off carriage lights at sunrise
-  trigger:
-  - platform: sun
+  triggers:
+  - trigger: sun
     event: sunrise
     offset: 0
-  condition: []
-  action:
-  - service: switch.turn_off
+  conditions: []
+  actions:
+  - action: switch.turn_off
     target:
       entity_id:
       - switch.carriage_lights
@@ -179,13 +179,13 @@
 - id: '1704152978232'
   alias: Deck Lights - Turn On
   description: Turn on the deck lights at sunset
-  trigger:
-  - platform: sun
+  triggers:
+  - trigger: sun
     event: sunset
     offset: 0
-  condition: []
-  action:
-  - service: switch.turn_on
+  conditions: []
+  actions:
+  - action: switch.turn_on
     metadata: {}
     data: {}
     target:
@@ -194,12 +194,12 @@
 - id: '1704153027046'
   alias: Deck Lights - Turn Off
   description: Turn off the deck lights at 10:30
-  trigger:
-  - platform: time
+  triggers:
+  - trigger: time
     at: '22:30:00'
-  condition: []
-  action:
-  - service: switch.turn_off
+  conditions: []
+  actions:
+  - action: switch.turn_off
     metadata: {}
     data: {}
     target:
@@ -208,20 +208,20 @@
 - id: '1704753058492'
   alias: Amy and Ti Left Home
   description: Take some actions when both Amy and Ti aren't home
-  trigger:
-  - platform: device
+  triggers:
+  - trigger: device
     device_id: c649c07764020e9d99e38656cf640e62
     domain: device_tracker
     entity_id: 5965ecf66909f3a0f926b23f8d4cef8b
     type: leaves
     zone: zone.home
-  - platform: device
+  - trigger: device
     device_id: ba46bf63c37c0f5c0e4c054b5d7286c7
     domain: device_tracker
     entity_id: 82547043c87592e35391f94b52bc7d8c
     type: leaves
     zone: zone.home
-  condition:
+  conditions:
   - condition: and
     conditions:
     - condition: device
@@ -234,8 +234,8 @@
       domain: device_tracker
       entity_id: 82547043c87592e35391f94b52bc7d8c
       type: is_not_home
-  action:
-  - service: notify.mobile_app_tis_iphone
+  actions:
+  - action: notify.mobile_app_tis_iphone
     data:
       message: Amy and Ti left home
   mode: single
@@ -243,12 +243,12 @@
   alias: Low Battery Notification and Todo Generator
   description: Find sensors that have low batteries that need a todo created, notify
     about the sensor battery, and create a todo in Todoist
-  trigger:
-  - platform: time
+  triggers:
+  - trigger: time
     at: 09:00:00
-  condition: []
-  action:
-  - service: script.todo_test
+  conditions: []
+  actions:
+  - action: script.todo_test
     data: {}
   mode: single
 - id: '1711215722258'
