@@ -48,6 +48,16 @@ Three independent tiers, each catching something the others can't:
   entity IDs or logic that only breaks against real state — nothing earlier in the chain can see
   that.
 
+Pre-commit only ever checks staged files. For a broader pass — a refactor, a review of changes
+across many files — run `scripts/validate.sh` from the repo root: the same yamllint/syntax/
+secrets-drift checks across every tracked YAML file, plus `scripts/hooks/check_duplicate_ids.py`
+(catches two packages defining the same automation `id:`, `script:` key, or scene `id:` — these
+merge into shared namespaces across `packages/*.yaml` + `automations.yaml`, and a collision
+doesn't error at merge time, it just lets one definition silently win). It bootstraps its own
+venv at `.venv-lint/` (gitignored) on first run. See the `validate-repo` skill for more detail,
+and `migrate-to-package` for the procedure this repo uses to move something out of a flat
+top-level file (or between packages) — both live under `.claude/skills/`.
+
 `.HA_VERSION` (the version CI's Home Assistant config-check pins against) is kept current
 automatically rather than hand-maintained: `packages/config_repo_sync.yaml` runs
 `scripts/commit_ha_version.sh` on every HA start, which commits and pushes `.HA_VERSION` only

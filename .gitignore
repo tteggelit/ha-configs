@@ -23,3 +23,9 @@ zigbee2mqtt/configuration_backup*.yaml
 # packages/config_repo_sync.yaml) to push .HA_VERSION bumps. Scoped to
 # this repo only via a GitHub Deploy Key -- never commit the private key.
 .ssh/
+
+# Throwaway venv scripts/validate.sh bootstraps for yamllint/pyyaml.
+.venv-lint/
+
+# Per-developer Claude Code permissions, not shared repo config.
+.claude/settings.local.json
