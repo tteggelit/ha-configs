@@ -10,8 +10,12 @@ the running HA instance. "Deploying" a change means committing it and having HA 
 restart or a reload service), not running any tooling in this repo.
 
 `secrets.yaml` is gitignored and does not exist in the repo; files reference secrets via `!secret
-<key>`. Other gitignored paths (`.storage`, `.cloud`, `custom_components`, `deps`, `image`, `tts`,
-`esphome/archive`) are runtime/local state, not source.
+<key>`. `secrets.yaml.example` documents every key (no real values) and stands in for the real
+file in CI and local ESPHome checks. Other gitignored paths (`.storage`, `.cloud`,
+`custom_components`, `deps`, `image`, `tts`, `esphome/archive`) are runtime/local state, not
+source. `.ssh/` is also gitignored — it holds the private deploy key
+`scripts/commit_ha_version.sh` uses to auto-push `.HA_VERSION` bumps (see Validating changes
+below); never let a key from there end up in a commit.
 
 When writing or updating YAML in this repo, follow Home Assistant's own
 [YAML Syntax](https://www.home-assistant.io/docs/configuration/yaml/) reference (indentation,
@@ -21,11 +25,36 @@ ordering, quoting, and formatting conventions) rather than improvising formattin
 
 ## Validating changes
 
-There is no local linter or test runner. To check a change before it's live:
-- YAML syntax only: `python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" <file>`
-- Full HA config validation requires the running instance: Developer Tools → YAML → "Check
-  Configuration" in the UI, or `ha core check` on the HA host itself. This repo has no way to run
-  that check standalone since it depends on integrations/entities only the live instance knows about.
+Three independent tiers, each catching something the others can't:
+
+- **Pre-commit** (laptop, one-time setup `pip install pre-commit && pre-commit install`,
+  config in `.pre-commit-config.yaml`): `yamllint` (`.yamllint.yaml` — extends `default` with
+  HA-specific tweaks; all the normal checks are enabled, including trailing whitespace, blank
+  lines, and missing final newline, so don't reintroduce those), a tag-aware YAML syntax check
+  (`scripts/hooks/check_yaml_syntax.py` — parses with constructors registered for HA's custom
+  tags like `!secret`/`!include` instead of choking on them the way plain `yaml.safe_load`
+  would), a secrets-drift check (`scripts/hooks/check_secrets_drift.py` — fails if a file
+  references `!secret <key>` that isn't documented in `secrets.yaml.example`), and ESPHome
+  config validation on changed `esphome/*.yaml` files.
+- **CI** (`.github/workflows/validate.yml`, runs on every push/PR to `main`): the same
+  yamllint/syntax/secrets-drift checks, plus the actual `check_config` Home Assistant itself
+  runs, via `frenck/action-home-assistant`, against `secrets.yaml.example` in place of the real
+  (gitignored) `secrets.yaml`. This is the only tier that assembles every package together, so
+  it's what catches package-merge conflicts (e.g. two packages defining the same helper) and
+  schema errors invisible to a single-file check.
+- **Host deploy** (`scripts/deploy.sh`, run on the HAOS host in place of a raw `git pull`):
+  backs up, pulls, and runs `ha core check` before you decide whether to restart. This is the
+  only tier with access to the live entity registry, so it's the last line of defense for wrong
+  entity IDs or logic that only breaks against real state — nothing earlier in the chain can see
+  that.
+
+`.HA_VERSION` (the version CI's Home Assistant config-check pins against) is kept current
+automatically rather than hand-maintained: `packages/config_repo_sync.yaml` runs
+`scripts/commit_ha_version.sh` on every HA start, which commits and pushes `.HA_VERSION` only
+when it actually changed (a real Core upgrade, not just a same-version restart), using a
+dedicated, repo-scoped GitHub Deploy Key — not the personal credentials used for manual pushes
+from that host. See that script's header comment for the one-time key setup, which is
+deliberately manual, not automated, since it grants a new persistent write credential.
 
 ## Applying changes on the live instance
 
@@ -42,23 +71,35 @@ There is no local linter or test runner. To check a change before it's live:
 
 `configuration.yaml` is the entry point. It wires together:
 - `homeassistant.packages: !include_dir_named packages` — every file in `packages/` is loaded as a
-  named package.
-- `automation: !include automations.yaml`, `script: !include scripts.yaml`,
-  `scene: !include scenes.yaml` — top-level, not-package-specific definitions (many carry numeric
-  `id:` values because they were originally created in the UI).
-- `template: !include templates.yaml` — a handful of legacy-style template sensors, distinct from
-  the newer trigger-based template sensors defined inline inside individual packages.
+  named package. This is now where essentially everything lives: automations, scripts, scenes,
+  and template sensors alike, each defined under its subsystem's package file.
+- `automation: !include automations.yaml` — holds exactly one automation now (Leak Detection &
+  Notifier, a single blueprint stanza with no natural subsystem package to live in). There is no
+  more `script:`/`scene:`/`template:` top-level include: `scripts.yaml`, `scenes.yaml`, and
+  `templates.yaml` were fully migrated into packages and deleted, along with their includes here.
+  If you're looking for a script, scene, or template sensor, it's in a package, not a flat
+  top-level file — `grep -rl <name> packages/` beats guessing which file.
 - `homekit: !include homekit.yaml` — two HomeKit bridges (Main, Amy), each with its own
   domain/entity include-exclude filter, exposing a curated entity set to Apple Home.
 - `frontend.themes: !include_dir_merge_named themes` and HACS `lovelace-card-mod` for dashboard
   styling.
 
-**`packages/`** is where most non-trivial logic lives. Each file is a self-contained feature bundle
-named for the subsystem it implements (e.g. `irrigation.yaml`, `solar_array.yaml`,
-`basement_lighting.yaml`, `thermostat_humidity.yaml`, `lightning_detection.yaml`,
-`severe_weather.yaml`) and typically defines, together in one file: its own `input_*` helpers,
-template sensors, scripts, and automations. When editing one subsystem, everything relevant is
-usually in that single package file — you rarely need to hunt across other files.
+**`packages/`** is where all non-trivial logic lives, one file per subsystem (e.g.
+`irrigation.yaml`, `solar_array.yaml`, `basement_lighting.yaml`, `basement.yaml` — non-lighting
+basement automations, kept separate from `basement_lighting.yaml` on purpose — `thermostat_humidity.yaml`,
+`lightning_detection.yaml`, `severe_weather.yaml`, `security.yaml`, `presence.yaml`,
+`maintenance.yaml`, and the per-area lighting packages: `kitchen_lighting.yaml`,
+`exterior_lighting.yaml`, `master_closet_lighting.yaml`, `living_room_lighting.yaml`,
+`grow_tent.yaml`). Each package typically defines, together in one file: its own `input_*`
+helpers, template sensors, scripts, and automations for that subsystem. When editing one
+subsystem, everything relevant is usually in that single package file — you rarely need to hunt
+across other files.
+
+One deliberate exception: **`lighting_control.yaml`** holds generic, parametrized light-control
+scripts (color-cycle, brightness step, etc.) that take the target light(s) and a reference light
+as input — it is not scoped to any one room or remote type. If you're adding light-control logic
+that's reusable across multiple physical remotes or rooms, it belongs here, not duplicated into
+or coupled to whichever package happens to trigger it first.
 
 Recurring patterns worth knowing before editing packages:
 - **Forecast fetching**: several packages (`irrigation.yaml`, `owm_hourly_forecast.yaml`) use
@@ -75,10 +116,17 @@ Recurring patterns worth knowing before editing packages:
 - **Toggle scripts for dashboards**: some packages expose a `script.*_toggle_*` wrapper that starts
   or cancels a long-running script based on its current state, because Mushroom template cards
   can't evaluate Jinja2 in `tap_action`.
+- **Shared scripts over duplicated automations**: where the same action sequence used to be
+  copy-pasted across two or three trigger paths (e.g. `security.yaml`'s `secure_front_door`,
+  `secure_garage`, `house_lights_off`, each called from more than one alarm-state automation),
+  it's now one script called from each caller. Prefer this over re-copying a sequence when adding
+  a new trigger path that needs the same actions.
 - Entity IDs are HA-auto-generated from friendly names and can diverge from what you'd expect (e.g.
   a sensor named `"Met.no Forecast Cache"` becomes `sensor.irrigation_met_no_forecast_cache`, not
   `..._met_forecast_cache`) — check the actual entity_id rather than assuming it matches the
-  `unique_id` or name.
+  `unique_id` or name. This matters even more for scripts with no `unique_id:`: their YAML key
+  *is* their entity identity, and renaming them in the UI changes the displayed name but not that
+  key — a source of confusion worth double-checking against, not assuming away.
 
 **Other directories:**
 - `blueprints/automation|script|template/` — a mix of official Home Assistant blueprints
