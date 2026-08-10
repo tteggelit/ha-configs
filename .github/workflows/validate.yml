@@ -35,6 +35,11 @@ jobs:
           python3 scripts/hooks/check_secrets_drift.py \
             $(git ls-files '*.yaml' '*.yml' | grep -v '^www/')
 
+      - name: Duplicate automation id / script key / scene id check
+        run: |
+          python3 scripts/hooks/check_duplicate_ids.py \
+            $(git ls-files 'packages/*.yaml' 'automations.yaml')
+
       - name: Home Assistant config check
         uses: frenck/action-home-assistant@v1.4.1
         with:

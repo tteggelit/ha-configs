@@ -6,9 +6,11 @@ description: Run the fast, laptop-side config checks (yamllint, HA-tag-aware syn
 # Validate repo
 
 Runs the checks documented in `CLAUDE.md`'s "Validating changes" section, but across every
-tracked YAML file in the repo rather than only what's staged -- pre-commit only ever sees staged
-files, which misses anything edited but not yet `git add`ed, or edited in a prior commit you're
-now reviewing.
+tracked YAML file in the repo rather than only what's staged. Pre-commit only ever sees staged
+files for most of its hooks, which misses anything edited but not yet `git add`ed, or edited in a
+prior commit you're now reviewing -- the one exception is the duplicate-id hook, which always
+checks every package together regardless of what's staged, since a collision can involve a file
+that isn't even part of the current change.
 
 ## Steps
 
@@ -36,11 +38,12 @@ This is the fast tier only. It does not run:
   which is a heavy dependency not worth carrying for a routine check. Covered by
   `.pre-commit-config.yaml`'s `esphome-config` hook and by CI.
 - The actual Home Assistant `check_config` — needs a real HA core install or the
-  `frenck/action-home-assistant` container CI uses. This is what catches package-merge schema
-  errors (e.g. two packages defining conflicting values for the same non-list key) that pure YAML
-  validation can't see, since nothing short of HA's own config loader actually assembles every
-  package together. Runs in `.github/workflows/validate.yml` on every push, and via
-  `scripts/deploy.sh`'s `ha core check` step on the host.
+  `frenck/action-home-assistant` container CI uses. Beyond the id/key collisions
+  `check_duplicate_ids.py` already catches, this is what catches package-merge conflicts that are
+  only visible once HA's own config loader assembles every package together (e.g. two packages
+  setting conflicting values for the same legitimately-shared scalar key) and schema errors pure
+  YAML validation can't see at all. Runs in `.github/workflows/validate.yml` on every push, and
+  via `scripts/deploy.sh`'s `ha core check` step on the host.
 - Anything that needs the live entity registry (wrong entity IDs, logic that only breaks against
   real state). Only `scripts/deploy.sh`, run on the actual HAOS host, can catch that.
 

@@ -34,29 +34,37 @@ Three independent tiers, each catching something the others can't:
   (`scripts/hooks/check_yaml_syntax.py` — parses with constructors registered for HA's custom
   tags like `!secret`/`!include` instead of choking on them the way plain `yaml.safe_load`
   would), a secrets-drift check (`scripts/hooks/check_secrets_drift.py` — fails if a file
-  references `!secret <key>` that isn't documented in `secrets.yaml.example`), and ESPHome
-  config validation on changed `esphome/*.yaml` files.
+  references `!secret <key>` that isn't documented in `secrets.yaml.example`), a duplicate
+  automation-id/script-key/scene-id check (`scripts/hooks/check_duplicate_ids.py` — see below),
+  and ESPHome config validation on changed `esphome/*.yaml` files. Every hook here except the
+  duplicate-id one only looks at staged files, since that's all pre-commit passes them.
 - **CI** (`.github/workflows/validate.yml`, runs on every push/PR to `main`): the same
-  yamllint/syntax/secrets-drift checks, plus the actual `check_config` Home Assistant itself
-  runs, via `frenck/action-home-assistant`, against `secrets.yaml.example` in place of the real
-  (gitignored) `secrets.yaml`. This is the only tier that assembles every package together, so
-  it's what catches package-merge conflicts (e.g. two packages defining the same helper) and
-  schema errors invisible to a single-file check.
+  yamllint/syntax/secrets-drift/duplicate-id checks, plus the actual `check_config` Home
+  Assistant itself runs, via `frenck/action-home-assistant`, against `secrets.yaml.example` in
+  place of the real (gitignored) `secrets.yaml`. This is the only tier that actually assembles
+  every package together through HA's own loader, so it's what catches package-merge conflicts
+  that aren't just an id/key collision (e.g. two packages setting conflicting values for the same
+  scalar key) and schema errors invisible to a single-file check.
 - **Host deploy** (`scripts/deploy.sh`, run on the HAOS host in place of a raw `git pull`):
   backs up, pulls, and runs `ha core check` before you decide whether to restart. This is the
   only tier with access to the live entity registry, so it's the last line of defense for wrong
   entity IDs or logic that only breaks against real state — nothing earlier in the chain can see
   that.
 
-Pre-commit only ever checks staged files. For a broader pass — a refactor, a review of changes
-across many files — run `scripts/validate.sh` from the repo root: the same yamllint/syntax/
-secrets-drift checks across every tracked YAML file, plus `scripts/hooks/check_duplicate_ids.py`
-(catches two packages defining the same automation `id:`, `script:` key, or scene `id:` — these
-merge into shared namespaces across `packages/*.yaml` + `automations.yaml`, and a collision
-doesn't error at merge time, it just lets one definition silently win). It bootstraps its own
-venv at `.venv-lint/` (gitignored) on first run. See the `validate-repo` skill for more detail,
-and `migrate-to-package` for the procedure this repo uses to move something out of a flat
-top-level file (or between packages) — both live under `.claude/skills/`.
+The duplicate-id check (`scripts/hooks/check_duplicate_ids.py`) is the one exception to
+"pre-commit only sees staged files": since two files can collide even when only one of them is
+being edited, its pre-commit hook ignores the staged-file list and always checks every
+`packages/*.yaml` + `automations.yaml` together — automation `id:`, `script:` key, and scene
+`id:` all merge into shared namespaces across those files at HA's package-merge time, and a
+collision doesn't error there, it just lets one definition silently win.
+
+For a broader pass beyond what pre-commit's per-file scoping covers — a refactor, a review of
+changes across many files — run `scripts/validate.sh` from the repo root: the same
+yamllint/syntax/secrets-drift/duplicate-id checks across every tracked YAML file, not just
+staged ones. It bootstraps its own venv at `.venv-lint/` (gitignored) on first run. See the
+`validate-repo` skill for more detail, and `migrate-to-package` for the procedure this repo uses
+to move something out of a flat top-level file (or between packages) — both live under
+`.claude/skills/`.
 
 `.HA_VERSION` (the version CI's Home Assistant config-check pins against) is kept current
 automatically rather than hand-maintained: `packages/config_repo_sync.yaml` runs

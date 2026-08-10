@@ -34,6 +34,20 @@ repos:
         additional_dependencies: ["pyyaml"]
         files: \.ya?ml$
 
+      - id: ha-duplicate-ids
+        name: Duplicate automation id / script key / scene id check
+        description: >-
+          Checks every packages/*.yaml + automations.yaml together, not just
+          changed files -- a collision between a file you're editing and one
+          you're not doesn't error at HA's package-merge time, it just lets
+          one definition silently win, so this can't be scoped to only
+          staged files the way the other hooks here are.
+        entry: bash -c 'python3 scripts/hooks/check_duplicate_ids.py $(git ls-files "packages/*.yaml" "automations.yaml")'
+        language: python
+        additional_dependencies: ["pyyaml"]
+        files: ^(packages/.*\.ya?ml|automations\.yaml)$
+        pass_filenames: false
+
       - id: esphome-config
         name: ESPHome config validation
         description: >-
