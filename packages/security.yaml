@@ -61,12 +61,9 @@ automation:
         target:
           entity_id:
           - switch.living_room_side_lights_outlet
-    - metadata: {}
-      data:
-        preset_mode: home
-      action: climate.set_preset_mode
-      target:
+    - data:
         entity_id: climate.thermostat_2
+      action: ecobee.resume_program
     - metadata: {}
       data: {}
       target:
