@@ -1,5 +1,5 @@
-# This package binds Aidan's Nightstand Light Remote (an IKEA Styrbar)
-# to Aidan's nightstand light. Shared color-cycle/brightness-ramp logic
+# This package binds Ash's Nightstand Light Remote (an IKEA Styrbar)
+# to Ash's nightstand light. Shared color-cycle/brightness-ramp logic
 # lives in packages/lighting_control.yaml -- see that file for what
 # each script expects.
 #
@@ -19,36 +19,36 @@
 # and call the same shared scripts.
 
 automation:
-  - alias: Aidan's Nightstand Light Control
+  - alias: Ash's Nightstand Light Control
     description: Control RGB light with Styrbar remote
     mode: restart
     triggers:
       - trigger: mqtt
-        topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
+        topic: "zigbee2mqtt/Ash's Nightstand Light Remote/action"
         payload: "on"
         id: button_on
       - trigger: mqtt
-        topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
+        topic: "zigbee2mqtt/Ash's Nightstand Light Remote/action"
         payload: "off"
         id: button_off
       - trigger: mqtt
-        topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
+        topic: "zigbee2mqtt/Ash's Nightstand Light Remote/action"
         payload: "brightness_move_up"
         id: brightness_up
       - trigger: mqtt
-        topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
+        topic: "zigbee2mqtt/Ash's Nightstand Light Remote/action"
         payload: "brightness_move_down"
         id: brightness_down
       - trigger: mqtt
-        topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
+        topic: "zigbee2mqtt/Ash's Nightstand Light Remote/action"
         payload: "brightness_stop"
         id: brightness_stop
       - trigger: mqtt
-        topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
+        topic: "zigbee2mqtt/Ash's Nightstand Light Remote/action"
         payload: "arrow_left_click"
         id: color_left
       - trigger: mqtt
-        topic: "zigbee2mqtt/Aidan's Nightstand Light Remote/action"
+        topic: "zigbee2mqtt/Ash's Nightstand Light Remote/action"
         payload: "arrow_right_click"
         id: color_right
     actions:
