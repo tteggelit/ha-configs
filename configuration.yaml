@@ -57,3 +57,8 @@ logger:
       - "Max retries exceeded"
       - "Failed to resolve"
       - "NameResolutionError"
+
+recorder:
+  exclude:
+    entity_globs:
+      - geo_location.lightning_strike_*
