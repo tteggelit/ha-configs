@@ -88,6 +88,16 @@ zone:
     icon: mdi:home
 
 automation:
+  - alias: "Purge Old Lightning Strike Entities"
+    trigger:
+      - platform: time_pattern
+        hours: "/6"  # runs every 6 hours
+    action:
+      - action: recorder.purge_entities
+        data:
+          entity_globs:
+            - geo_location.lightning_strike_*
+          keep_days: 1
   - alias: 'Thunderstorm Alert'
     description: >-
       Sends tiered alerts for approaching lightning, but only if the forecast
