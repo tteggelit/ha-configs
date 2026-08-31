@@ -14862,6 +14862,11 @@ class EntityConfig {
   useBaseEntityOnly;
   /** @type {number} */
   positionUpdateThreshold;
+  /**
+   * @type {number} Min map zoom at which a `display: pill` marker shows the
+   * offset callout + leader line; below it the pill centers on the point.
+   */
+  pillCalloutMinZoom;
 
   /** @type {CircleConfig} */
   circleConfig;
@@ -14927,6 +14932,7 @@ class EntityConfig {
 
     this.useBaseEntityOnly = config.use_base_entity_only ?? false;
     this.positionUpdateThreshold = config.position_update_threshold ?? 10;
+    this.pillCalloutMinZoom = config.pill_callout_min_zoom ?? 15;
 
     this.circleConfig = new CircleConfig(config.circle, this.color);
     this.geoJsonConfig = new GeoJsonConfig(config.geojson, this.color);
@@ -15274,7 +15280,13 @@ class GeoJson {
    * @returns {object|null}
    */
   _getGeoJsonData() {
-    const attributeValue = this.entity.attributes[this.config.attribute];
+    // Always read live hass state. Entity.attributes prefers the latest
+    // history timeline entry, which typically only has lat/lng — so once
+    // history loads the GeoJSON attribute disappears and the layer is
+    // cleared (#204).
+    const liveAttrs = this.entity.hass?.states?.[this.entity.id]?.attributes;
+    const attrs = liveAttrs ?? this.entity.attributes ?? {};
+    const attributeValue = attrs[this.config.attribute];
 
     if (!attributeValue) {
       Logger.debug(`[GeoJson]: No data found in attribute '${this.config.attribute}' for ${this.entity.id}`);
@@ -15498,6 +15510,9 @@ class EntityHistory {
             color: this.color,
             opacity,
             interactive: false,
+            // Round caps from adjacent segments stack on the shared vertex
+            // and make joints darker than the segments (#164).
+            lineCap: 'butt',
           })
         );
       }
@@ -15769,7 +15784,9 @@ class EntityHistoryManager {
   linkedEntityService;
   /** @type {EntityHistory} */
   history;
-
+  /** @type {number|null} @private */
+  _updateTimeout;
+  
   constructor(entity, historyService, dateRangeManager, linkedEntityService) {
     this.entity = entity;
     this.historyService = historyService;
@@ -15833,12 +15850,20 @@ class EntityHistoryManager {
       this.currentHistoryEnd = this.entity.config.historyEnd;
     }
 
+    // Only open history/stream when the user actually configured history.
+    // A 10s-ago fallback used to be sent for live marker updates; HA 2026.7+
+    // rejects that start_time, the subscribe fails, and the marker never moves
+    // (see #217). Live position now comes from hass.states on each render.
+    if (!this.hasHistory) {
+      Logger.debug(`[EntityHistoryManager] No history configured for ${this.entity.id}, skipping subscription`);
+      return;
+    }
+
     // Skip the initial subscription when dates will be provided dynamically.
     // The date range manager or linked entity callbacks will call refreshHistory()
     // with the proper dates shortly after init.
     if (!this.entity.config.usingDateRangeManager && !this.entity.config.historyStartEntity) {
-      const historyStart = this.entity.config.historyStart ?? new Date(Date.now() - 10 * 1000);
-      this.subscribeHistory(historyStart, this.entity.config.historyEnd);
+      this.subscribeHistory(this.currentHistoryStart, this.currentHistoryEnd);
     } else {
       Logger.debug(`[EntityHistoryManager] Skipping initial subscription for ${this.entity.id}, waiting for dynamic dates`);
     }
@@ -15851,15 +15876,20 @@ class EntityHistoryManager {
   }
 
   refreshHistory() {
+    if (!this.hasHistory) {
+      return;
+    }
     Logger.debug(`[EntityHistoryManager] Refreshing history for ${this.entity.id}: ${this.currentHistoryStart} -> ${this.currentHistoryEnd}`);
-    this.historyLayerGroup.clearLayers();
+    this.historyLayerGroup?.clearLayers();
     this.subscribeHistory(this.currentHistoryStart, this.currentHistoryEnd);
   }
 
   subscribeHistory(start, end) {
-    if(this.hasHistory) {
-      this.history = new EntityHistory(this.entity.id, this.entity.tooltip, this.entity.config.historyLineColor, this.entity.config.gradualOpacity, this.entity.config.historyShowDots, this.entity.config.historyShowLines);
+    if (!this.hasHistory) {
+      Logger.debug(`[EntityHistoryManager] Skipping history subscription for ${this.entity.id}; no history configured`);
+      return;
     }
+    this.history = new EntityHistory(this.entity.id, this.entity.tooltip, this.entity.config.historyLineColor, this.entity.config.gradualOpacity, this.entity.config.historyShowDots, this.entity.config.historyShowLines);
     this.historyService.subscribe(this.entity.id, start, end, this.react.bind(this), this.entity.config.useBaseEntityOnly);
   }
 
@@ -15871,6 +15901,8 @@ class EntityHistoryManager {
 
     if(this.hasHistory) {
       this.history.react(entry);
+      if (this._updateTimeout) clearTimeout(this._updateTimeout);
+      this._updateTimeout = setTimeout(() => this.update(), 100);
     }
     this.entity.react(entry);
   }
@@ -15884,6 +15916,7 @@ class EntityHistoryManager {
     this.history?.update().flat().forEach((marker) => {
       marker.addTo(this.historyLayerGroup);
     });
+    this.entity.updateMarkerPosition();
   }
 }
 
@@ -15977,7 +16010,7 @@ class Entity {
 
   /** @returns {{[key: string]: object}} */
   get attributes() {
-    return this.currentTimelineEntry?.state.a ?? this.hass.states[this.id].attributes;
+    return this.currentTimelineEntry?.state.a ?? this.hass.states[this.id]?.attributes ?? {};
   }
 
   /** 
@@ -16013,22 +16046,28 @@ class Entity {
     let subTrackerIds = this.attributes.device_trackers ?? [];
     for (let t = 0; t < subTrackerIds.length; t++) {
       const entity = this.hass.states[subTrackerIds[t]];
-      if (entity.attributes.latitude && entity.attributes.longitude) {
+      if (entity?.attributes?.latitude && entity.attributes.longitude) {
         return new leafletSrcExports.LatLng(entity.attributes.latitude, entity.attributes.longitude);
       }
     }
 
-    Logger.warn("Entity: " + this.id + " has no latitude & longitude");
+    if (this._lastSetLatLng) {
+      return this._lastSetLatLng;
+    }
+
     if (this.config.fallbackX && this.config.fallbackY) {
       return new leafletSrcExports.LatLng(this.config.fallbackX, this.config.fallbackY);
     }
-    Logger.error("Entity: " + this.id + " has no fallback latitude & longitude");
-    throw Error("Entity: " + this.id + " has no latitude & longitude and no fallback configured")
+
+    Logger.warn("Entity: " + this.id + " has no latitude & longitude; skipping marker");
+    return null;
   }
 
   setup(clusterGroup = null) {
-    // Only add marker if GeoJSON is not configured to hide it
-    if (!this.config.geoJsonConfig.hideMarker) {
+    // Only add marker if GeoJSON is not configured to hide it and we have a
+    // position. Missing/unknown coords used to throw here and abort the rest
+    // of the card (#91, #173).
+    if (!this.config.geoJsonConfig?.hideMarker && this.latLng) {
       this.marker = this.createMapMarker();
 
       // Bind distance tooltip if configured
@@ -16051,10 +16090,45 @@ class Entity {
       }
       // Initialize last set position to prevent immediate update
       this._lastSetLatLng = this.latLng;
+      // Track the current place so update() can recreate the pill on zone change
+      this._currentPlaceIcon = this.placeIcon;
+      this._clusterGroup = clusterGroup;
+      // For `display: pill`, the offset callout + leader only show at/above
+      // pillCalloutMinZoom; recreate the marker when zoom crosses that boundary
+      // so it isn't obtrusive when zoomed out region-wide.
+      if (this.display == "pill") {
+        this._calloutActive = this.map.getZoom() >= this.config.pillCalloutMinZoom;
+        this._onZoomEnd = () => {
+          if (!this.marker) return;
+          const active = this.map.getZoom() >= this.config.pillCalloutMinZoom;
+          if (active !== this._calloutActive) {
+            this._calloutActive = active;
+            this._recreateMarker();
+          }
+        };
+        this.map.on("zoomend", this._onZoomEnd);
+      }
     }
     this.historyManager.setup();
     this.circle.setup();
     this.geoJson.setup();
+  }
+
+  /**
+   * Remove and rebuild the marker in place (preserving cluster membership).
+   * @private
+   */
+  _recreateMarker() {
+    const cg = this._clusterGroup;
+    this.marker.remove();
+    this.marker = this.createMapMarker();
+    if (cg) {
+      cg.addLayer(this.marker);
+    } else {
+      this.marker.addTo(this.map);
+    }
+    this._currentTitle = this.title;
+    this._currentPlaceIcon = this.placeIcon;
   }
 
   /** @param {TimelineEntry} entry */
@@ -16096,11 +16170,59 @@ class Entity {
 
   /** @returns {string} */
   get tooltip() {
+    // placeName only resolves in pill mode and when inside a zone.
+    const placeName = this.placeName;
+    if (placeName) {
+      // "<person> is at <place>" - strip a trailing tracker-ish suffix so
+      // "Mom Location" reads as "Mom is at Extended Family".
+      const who = (this.friendlyName ?? "").replace(/\s+(location|tracker|device|phone|gps)$/i, "");
+      return `${who} is at ${placeName}`;
+    }
     return this.friendlyName ?? "";
   }
 
   get icon() {
     return this.config.icon ?? this.attributes.icon;
+  }
+
+  /**
+   * The HA zone state object the entity is currently inside (a "named place"),
+   * or null when it isn't in one. Drives the place-pill marker. Matches the
+   * entity's RAW state against each zone's friendly_name (case-insensitive);
+   * the home zone reports state "home".
+   * @returns {object|null}
+   */
+  get zoneState() {
+    const raw = this.hass.states[this.id]?.state;
+    if (!raw || ["not_home", "away", "unknown", "unavailable"].includes(raw.toLowerCase())) {
+      return null;
+    }
+    const target = raw.toLowerCase();
+    for (const eid in this.hass.states) {
+      if (!eid.startsWith("zone.")) continue;
+      const fn = (this.hass.states[eid].attributes?.friendly_name ?? "").toLowerCase();
+      if (fn && fn === target) {
+        return this.hass.states[eid];
+      }
+    }
+    if (target === "home" && this.hass.states["zone.home"]) {
+      return this.hass.states["zone.home"];
+    }
+    return null;
+  }
+
+  /** @returns {string|null} mdi icon of the current named place (pill mode only). */
+  get placeIcon() {
+    if (this.display != "pill") return null;
+    const z = this.zoneState;
+    return z ? (z.attributes?.icon ?? "mdi:map-marker") : null;
+  }
+
+  /** @returns {string|null} friendly_name of the current named place (pill mode only). */
+  get placeName() {
+    if (this.display != "pill") return null;
+    const z = this.zoneState;
+    return z ? (z.attributes?.friendly_name ?? null) : null;
   }
 
   /**
@@ -16145,38 +16267,59 @@ class Entity {
   }
 
   async update(clusterGroup = null) {
+    // Entity recovered a position after being unknown/unavailable.
+    if (!this.marker && !this.config.geoJsonConfig?.hideMarker && this.latLng) {
+      this.marker = this.createMapMarker();
+      if (clusterGroup) {
+        clusterGroup.addLayer(this.marker);
+      } else {
+        this.marker.addTo(this.map);
+      }
+      this._lastSetLatLng = this.latLng;
+      this._currentPlaceIcon = this.placeIcon;
+    }
+
     // Only update marker if it exists (not hidden by GeoJSON config)
     if (this.marker) {
-      if(this.display == "state" || this.display == "attribute") {
-        if(this.title != this._currentTitle) {
-          Logger.debug("[Entity] updating marker for " + this.id + " from " + this._currentTitle + " to " + this.title);
-          // When recreating marker, we need to track if it was in a cluster
-          const wasInCluster = clusterGroup && clusterGroup.hasLayer(this.marker);
-          this.marker.remove();
-          this.marker = this.createMapMarker();
-          if (wasInCluster) {
-            clusterGroup.addLayer(this.marker);
-          } else if (clusterGroup) {
-            clusterGroup.addLayer(this.marker);
-          } else {
-            this.marker.addTo(this.map);
-          }
-          this._currentTitle = this.title;
+      // Recreate the marker when the display title changes (state/attribute
+      // modes) OR when the entity enters/leaves a named place (place-pill).
+      const titleChanged = (this.display == "state" || this.display == "attribute") && this.title != this._currentTitle;
+      const placeIconChanged = this.placeIcon != this._currentPlaceIcon;
+      if (titleChanged || placeIconChanged) {
+        Logger.debug("[Entity] recreating marker for " + this.id + " (title/place change)");
+        // When recreating marker, we need to track if it was in a cluster
+        const wasInCluster = clusterGroup && clusterGroup.hasLayer(this.marker);
+        this.marker.remove();
+        this.marker = this.createMapMarker();
+        if (wasInCluster) {
+          clusterGroup.addLayer(this.marker);
+        } else if (clusterGroup) {
+          clusterGroup.addLayer(this.marker);
+        } else {
+          this.marker.addTo(this.map);
         }
+        this._currentTitle = this.title;
+        this._currentPlaceIcon = this.placeIcon;
       }
 
-      // Update position only if it has changed significantly (configurable threshold in meters)
-      const newLatLng = this.latLng;
-      const threshold = this.config.positionUpdateThreshold;
-      if (!this._lastSetLatLng || this.map.distance(this._lastSetLatLng, newLatLng) > threshold) {
-        this.marker.setLatLng(newLatLng);
-        this._lastSetLatLng = newLatLng;
-      }
+      this.updateMarkerPosition();
     }
 
     this.historyManager.update();
     this.circle.update();
     this.geoJson.update();
+  }
+
+  updateMarkerPosition() {
+    if (!this.marker) return;
+    const newLatLng = this.latLng;
+    if (!newLatLng) return;
+    const threshold = this.config.positionUpdateThreshold;
+    // Update position only if it has changed significantly (configurable threshold in meters)
+    if (!this._lastSetLatLng || this.map.distance(this._lastSetLatLng, newLatLng) > threshold) {
+      this.marker.setLatLng(newLatLng);
+      this._lastSetLatLng = newLatLng;
+    }
   }
 
   /**
@@ -16196,18 +16339,40 @@ class Entity {
     }
 
     const extraCssClasses = this.darkMode ? "dark" : "";
+    // Pill mode (opt-in via display: pill): zone icon + initials when the entity
+    // is in a named place; falls back to the normal initials marker otherwise.
+    // placeIcon already returns null unless display === "pill".
+    const placeIcon = this.placeIcon;
+    if (this.display == "pill") {
+      icon = null;
+    }
+    // Pill-callout geometry (must match MapCardEntityMarker's pill render): the
+    // pill sits up-left of the point with a short leader line down-right to a
+    // dot on the exact location, so it doesn't cover what's underneath. The
+    // callout only engages at/above pillCalloutMinZoom; zoomed out, the pill
+    // centers on the point with no leader (so it isn't obtrusive region-wide).
+    const s = this.config.size;
+    const pillW = 2 * s + 14;
+    const pillH = s + 8;
+    const off = Math.round(s * 0.7);
+    const boxW = pillW + off;
+    const boxH = pillH + off;
+    const callout = placeIcon != null && this.map.getZoom() >= this.config.pillCalloutMinZoom;
 
-    return new leafletSrcExports.Marker(this.latLng, {
+    const marker = new leafletSrcExports.Marker(this.latLng, {
       icon: new leafletSrcExports.DivIcon({
         html: `
           <map-card-entity-marker
             entity-id="${this.id}"
             title="${this.title}"
+            label="${this.config.label ?? ""}"
             prefix="${this.config.prefix}"
             suffix="${this.config.suffix}"
             tooltip="${this.tooltip}"
             icon="${icon ?? ""}"
             picture="${picture ?? ""}"
+            place-icon="${placeIcon ?? ""}"
+            callout="${callout}"
             color="${this.config.color}"
             style="${this.config.css}"
             size="${this.config.size}"
@@ -16215,26 +16380,44 @@ class Entity {
             tap-action='${JSON.stringify(this.config.tapAction)}'
           ></map-card-entity-marker>
         `,
-        iconSize: [this.config.size, this.config.size],
+        iconSize: placeIcon ? (callout ? [boxW, boxH] : [pillW, pillH]) : [s, s],
+        iconAnchor: placeIcon ? (callout ? [boxW - 2, boxH - 2] : [pillW / 2, pillH / 2]) : [s / 2, s / 2],
         className: ''
       }),
-      title: this.id,
       zIndexOffset: this.config.zIndexOffset
     });
+    // Instant hover label: a Leaflet tooltip opens on mouseover with no delay,
+    // unlike the native `title` attribute (which the browser holds ~1s). The
+    // distance feature (setup) rebinds a permanent tooltip when configured.
+    if (!this.config.distanceEntity) {
+      marker.bindTooltip(this.tooltip, {
+        direction: "top",
+        offset: [0, -this.config.size / 2 - 4]
+      });
+    }
+    return marker;
   }
 }
 
 class FocusFollowConfig {
 
-  /** 
-   * @type {string} 
+  /**
+   * @type {string}
    * @private
    */
   selection = "none";
 
-  constructor(config) {
+  /**
+   * @type {number}
+   * @private
+   */
+  pauseSeconds = 0;
+
+  constructor(config, pauseSeconds) {
     this.selection = ['refocus', 'contains', 'none' ].includes(config) ? config : "none";
-    Logger.debug(`[FocusFollowConfig]: Setting up focus follow config with selection ${this.selection}`);
+    const parsedPauseSeconds = Number(pauseSeconds);
+    this.pauseSeconds = (!isNaN(parsedPauseSeconds) && parsedPauseSeconds > 0) ? parsedPauseSeconds : 0;
+    Logger.debug(`[FocusFollowConfig]: Setting up focus follow config with selection ${this.selection}, pauseSeconds ${this.pauseSeconds}`);
   }
 
   get isRefocus() {
@@ -16247,6 +16430,14 @@ class FocusFollowConfig {
 
   get isContains() {
     return this.selection == "contains";
+  }
+
+  get hasPause() {
+    return this.pauseSeconds > 0;
+  }
+
+  get pauseMilliseconds() {
+    return this.pauseSeconds * 1000;
   }
 
 }
@@ -16296,12 +16487,12 @@ class MapConfig {
   constructor(inputConfig) {
     this.title = inputConfig.title;
     this.focusEntity = inputConfig.focus_entity;
-    this.focusFollow = new FocusFollowConfig(inputConfig.focus_follow);
+    this.focusFollow = new FocusFollowConfig(inputConfig.focus_follow, inputConfig.focus_follow_pause);
     this.x = inputConfig.x;
     this.y = inputConfig.y;
     this.zoom = this._setConfigWithDefault(inputConfig.zoom, 12);
     this.cardSize = this._setConfigWithDefault(inputConfig.card_size, 5);
-    this.mapOptions = this._setConfigWithDefault(inputConfig.map_options, {});
+    this.mapOptions = this._normalizeMapOptions(this._setConfigWithDefault(inputConfig.map_options, {}));
 
     // Get theme mode.
     this.themeMode = ['dark', 'light', 'auto'].includes(inputConfig.theme_mode) ? inputConfig.theme_mode : 'auto';
@@ -16309,7 +16500,7 @@ class MapConfig {
     // Enable marker clustering (default: false)
     this.clusterMarkers = this._setConfigWithDefault(inputConfig.cluster_markers, false);
 
-    // Enable debug messaging. 
+    // Enable debug messaging.
     // Card is quite chatty with this enabled.
     if (inputConfig.debug){
       Logger.enableDebug();
@@ -16317,7 +16508,7 @@ class MapConfig {
 
     // Default historyStart/historyEnd can be set at the top level.
     // Entities can override these dates on an individual basis.
-    // 
+    //
     // If historyDateSelection is true, this replaces top level date functionality (and any entities that don't provide their own dates will also use this)
     this.historyDateSelection = inputConfig.history_date_selection ? true : false;
     if (this.historyDateSelection) {
@@ -16364,12 +16555,15 @@ class MapConfig {
       return new PluginConfig(plugin.hacs, plugin.url, plugin.name, plugin.options);
     });
 
-    this.tileLayer = new TileLayerConfig(
-      this._setConfigWithDefault(inputConfig.tile_layer_url, "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-      this._setConfigWithDefault(inputConfig.tile_layer_options, {}),
-      null, // Default layer doesn't pass history by default.
-      this._setConfigWithDefault(inputConfig.tile_layer_attribution, '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>')
-    );
+    const tileLayerUrl = this._setConfigWithDefault(inputConfig.tile_layer_url, "https://tile.openstreetmap.org/{z}/{x}/{y}.png");
+    this.tileLayer = tileLayerUrl
+      ? new TileLayerConfig(
+          tileLayerUrl,
+          this._setConfigWithDefault(inputConfig.tile_layer_options, {}),
+          null, // Default layer doesn't pass history by default.
+          this._setConfigWithDefault(inputConfig.tile_layer_attribution, '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>')
+        )
+      : null;
     if(!(Number.isFinite(this.x) && Number.isFinite(this.y)) && this.focusEntity == null && this.entities.length == 0) {
       throw new Error("We need a map latitude & longitude; set at least [x, y], a focus_entity or have at least 1 entities defined.");
     }
@@ -16387,6 +16581,17 @@ class MapConfig {
     }
   }
 
+  _normalizeMapOptions(mapOptions) {
+    if (mapOptions?.crs === 'simple') {
+      return {
+        ...mapOptions,
+        crs: L$2.CRS.Simple,
+      };
+    }
+
+    return mapOptions;
+  }
+
   /** @returns {boolean} if there is a title */
   get hasTitle() {
     return this.title != null;
@@ -16400,7 +16605,7 @@ class MapConfig {
       return (this.cardSize * 50) + 20;
     }
   }
-  
+
   /** @returns {[EntityConfig]} */
   get entitiesWithShowPath() {
     return this.entities.filter((ent) => ent.showPath);
@@ -19535,6 +19740,12 @@ class EntitiesRenderService {
   markerClusterGroup;
   /** @type {boolean} */
   clusterMarkers;
+  /** @type {boolean} */
+  isFollowPaused = false;
+  /** @type {number|null} */
+  _followPauseTimer = null;
+  /** @type {boolean} */
+  _isAutoFitting = false;
 
   constructor(map, hass, focusFollowConfig, entityConfigs, linkedEntityService, dateRangeManager, historyService, isDarkMode, clusterMarkers = true) {
     this.map = map;
@@ -19575,11 +19786,74 @@ class EntitiesRenderService {
     // Remove skipped entities.
     .filter(v => v);
 
+    if (!this.focusFollowConfig.isNone && this.focusFollowConfig.hasPause) {
+      this._setupFollowPauseListeners();
+    }
   }
 
-  async render() {
+  _setupFollowPauseListeners() {
+    this._pauseFollow = () => {
+      if (this._isAutoFitting) { return; }
+      this.isFollowPaused = true;
+      if (this._followPauseTimer) {
+        clearTimeout(this._followPauseTimer);
+        this._followPauseTimer = null;
+      }
+    };
+
+    this._scheduleResume = () => {
+      if (this._isAutoFitting) { return; }
+      if (this._followPauseTimer) {
+        clearTimeout(this._followPauseTimer);
+      }
+      this._followPauseTimer = setTimeout(() => {
+        this.isFollowPaused = false;
+        this._followPauseTimer = null;
+        this.updateInitialView();
+      }, this.focusFollowConfig.pauseMilliseconds);
+    };
+
+    this.map.on('mousedown', this._pauseFollow);
+    this.map.on('dragstart', this._pauseFollow);
+    this.map.on('zoomstart', this._pauseFollow);
+    this.map.on('mouseup', this._scheduleResume);
+    this.map.on('dragend', this._scheduleResume);
+    this.map.on('zoomend', this._scheduleResume);
+  }
+
+  cleanup() {
+    if (this._followPauseTimer) {
+      clearTimeout(this._followPauseTimer);
+      this._followPauseTimer = null;
+    }
+    if (this._pauseFollow) {
+      this.map.off('mousedown', this._pauseFollow);
+      this.map.off('dragstart', this._pauseFollow);
+      this.map.off('zoomstart', this._pauseFollow);
+    }
+    if (this._scheduleResume) {
+      this.map.off('mouseup', this._scheduleResume);
+      this.map.off('dragend', this._scheduleResume);
+      this.map.off('zoomend', this._scheduleResume);
+    }
+  }
+
+  async render(hass) {
+    if (hass) {
+      this.hass = hass;
+    }
     this.entities.forEach((ent) => {
-      ent.update(this.markerClusterGroup);
+      // Entity keeps the hass object from setup(); Lovelace replaces hass on
+      // every state change, so without this the marker reads a stale snapshot
+      // and never moves (#217).
+      try {
+        if (this.hass) {
+          ent.hass = this.hass;
+        }
+        ent.update(this.markerClusterGroup);
+      } catch (e) {
+        Logger.error("Entity: " + ent.id + " failed to update", e);
+      }
     });
     this.updateInitialView();
   }
@@ -19623,6 +19897,9 @@ class EntitiesRenderService {
     if(this.focusFollowConfig.isNone) {
       return;
     }
+    if(this.isFollowPaused) {
+      return;
+    }
     const points = this.entities.filter(e => e.config.focusOnFit).map((e) => e.latLng);
     if(points.length === 0) {
       return;
@@ -19634,6 +19911,10 @@ class EntitiesRenderService {
         return;
       }
     }
+    this._isAutoFitting = true;
+    this.map.once('moveend', () => {
+      this._isAutoFitting = false;
+    });
     this.map.fitBounds(bounds);
     Logger.debug("[EntitiesRenderService.updateInitialView]: Updating bounds to: " + points.join(","));
   }
@@ -19644,7 +19925,11 @@ class EntitiesRenderService {
       return;
     }
     // If not, get bounds of all markers rendered
-    const bounds = (new leafletSrcExports.LatLngBounds(points)).pad(0.1);    
+    const bounds = (new leafletSrcExports.LatLngBounds(points)).pad(0.1);
+    this._isAutoFitting = true;
+    this.map.once('moveend', () => {
+      this._isAutoFitting = false;
+    });
     this.map.fitBounds(bounds);
     Logger.debug("[EntitiesRenderService.setInitialView]: Setting initial view to: " + points.join(","));
   }
@@ -19668,6 +19953,32 @@ class InitialViewRenderService {
 
   setup() {
     Logger.debug("[InitialViewRenderService] Setting up initial view");
+    const container = this.map?.getContainer();
+
+    if (!container) return;
+
+    // If the container is already sized, apply the view immediately. Otherwise,
+    // use a one-shot ResizeObserver to wait for the browser to lay out the
+    // container, then apply the view once real dimensions are available.
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      this._applyInitialView();
+    } else {
+      const observer = new ResizeObserver(() => {
+        observer.disconnect();
+        try {
+          if (this.map?.getContainer()?.isConnected) {
+            this.map.invalidateSize();
+            this._applyInitialView();
+          }
+        } catch (e) {
+          Logger.debug("[InitialViewRenderService] Map no longer available, skipping initial view", e);
+        }
+      });
+      observer.observe(container);
+    }
+  }
+
+  _applyInitialView() {
     const latLng = this.getConfiguredLatLong(this.config, this.hass);
     
     if (latLng) {
@@ -20161,7 +20472,6 @@ class MapCard extends i {
       this.initialViewRenderService.setup();
 
       this.setupNeeded = false;
-      this.render();
       this.hasError = false;
     } catch (e) {
       this.hasError = true;
@@ -20173,19 +20483,22 @@ class MapCard extends i {
   }
 
   firstUpdated() {
-    this.setup();
+    if (this.hass) {
+      this.setup();
+    }
   };
 
   render() {
 
+    if (this.setupNeeded && this.hass && this.shadowRoot?.querySelector('#map')) {
+      this.setup();
+    }
+
     if (this.map) {
-      if (this.setupNeeded) {
-        this.setup();
-      }
       this.pluginsRenderService.render();
       this.tileLayersService.render();
       this.geoJsonRenderService.render(this.hass);
-      this.entitiesRenderService.render();
+      this.entitiesRenderService.render(this.hass);
       this.initialViewRenderService.render();
 
       if (!this.hasError && this.hadError) {
@@ -20244,7 +20557,6 @@ class MapCard extends i {
       for (let entry of entries) {
         if (entry.target === this.map?.getContainer()) {
           this.map?.invalidateSize();
-          this.initialViewRenderService?.setup();
         }
       }
     });
@@ -20267,10 +20579,12 @@ class MapCard extends i {
     // Add dark class if darkmode
     this._isDarkMode() ? mapEl.classList.add('dark') : mapEl.classList.add('light');
 
-    let tileUrl = this.urlResolver.resolveUrl(this._config.tileLayer.url);
-    let layer = new TileLayer(tileUrl, this._config.tileLayer.options);
-    map.addLayer(layer);
-    this.urlResolver.registerLayer(layer, this._config.tileLayer.url);
+    if (this._config.tileLayer) {
+      let tileUrl = this.urlResolver.resolveUrl(this._config.tileLayer.url);
+      let layer = new TileLayer(tileUrl, this._config.tileLayer.options);
+      map.addLayer(layer);
+      this.urlResolver.registerLayer(layer, this._config.tileLayer.url);
+    }
     return map;
   }
 
@@ -20291,9 +20605,8 @@ class MapCard extends i {
   connectedCallback() {
     super.connectedCallback();
     Logger.debug("[MapCard.connectedCallback] called");
-    // Reinitialize the map when the card gets reloaded but it's still in view
-    if (this.shadowRoot.querySelector('#map')) {
-      this.setup();
+    if (this.setupNeeded) {
+      this.requestUpdate();
     }
   }
 
@@ -20305,6 +20618,7 @@ class MapCard extends i {
     this.linkedEntityService?.disconnect();
     this.pluginsRenderService?.cleanup();
     this.geoJsonRenderService?.cleanup();
+    this.entitiesRenderService?.cleanup();
     this.map.remove();
     this.map = undefined;
   }
@@ -20426,16 +20740,31 @@ class MapCard extends i {
   }
 }
 
+/**
+ * Picture markers only get a text overlay when the user asked for one.
+ * Auto-generated initials (title) must not cover entity pictures (#197).
+ * @param {string} prefix
+ * @param {string} suffix
+ * @param {string} label
+ * @returns {boolean}
+ */
+function shouldOverlayPictureLabel(prefix, suffix, label) {
+  return Boolean(prefix || suffix || (label && String(label).trim()));
+}
+
 class MapCardEntityMarker extends i {
   static get properties() {
     return {
       'entityId': {type: String, attribute: 'entity-id'},
       'title': {type: String, attribute: 'title'},
+      'label': {type: String, attribute: 'label'},
       'prefix': {type: String, attribute: 'prefix'},
       'suffix': {type: String, attribute: 'suffix'},
       'tooltip': {type: String, attribute: 'tooltip'},
       'picture': {type: String, attribute: 'picture'},
       'icon': {type: String, attribute: 'icon'},
+      'placeIcon': {type: String, attribute: 'place-icon'},
+      'callout': {type: String, attribute: 'callout'},
       'color': {type: String, attribute: 'color'},
       'size': {type: Number},
       'tapAction': {type: Object, attribute: 'tap-action'},
@@ -20444,12 +20773,56 @@ class MapCardEntityMarker extends i {
   }
 
   render() {
+    // When the entity is inside a named place, render a horizontal "pill":
+    // a stadium outline holding two circles - the zone icon (left) and the
+    // entity's initials (right). Otherwise fall back to the normal marker.
+    if (this.placeIcon) {
+      // Pill: zone icon (left) + initials (right). Geometry must match
+      // Entity.createMapMarker. When `callout` is on (zoomed in) the pill sits
+      // up-left of the point with a thin leader line down-right to a dot on the
+      // exact location; otherwise it just centers on the point (no leader).
+      const s = this.size;
+      const pillW = 2 * s + 14;
+      const pillH = s + 8;
+      const pill = b`
+        <div class="place-pill" style="border-color: ${this.color}; width: ${pillW}px; height: ${pillH}px;">
+          <div class="pill-badge" style="border-color: ${this.color}; width: ${s}px; height: ${s}px;">
+            <ha-icon icon="${this.placeIcon}" style="--icon-primary-color: ${this.color}; --mdc-icon-size: ${s - 14}px;"></ha-icon>
+          </div>
+          <div class="pill-badge pill-initials" style="border-color: ${this.color}; color: ${this.color}; width: ${s}px; height: ${s}px; font-size: ${Math.round(s * 0.5)}px;">
+            ${this.title}
+          </div>
+        </div>`;
+      if (this.callout !== "true") {
+        return b`
+          <div class="place-pill-wrap ${this.extraCssClasses ? this.extraCssClasses : ""}"
+               style="width: ${pillW}px; height: ${pillH}px;"
+               @click=${this._badgeTap}>
+            ${pill}
+          </div>`;
+      }
+      const off = Math.round(s * 0.7);
+      const boxW = pillW + off;
+      const boxH = pillH + off;
+      const dotX = boxW - 2, dotY = boxH - 2;
+      return b`
+        <div class="place-pill-wrap ${this.extraCssClasses ? this.extraCssClasses : ""}"
+             style="width: ${boxW}px; height: ${boxH}px;"
+             @click=${this._badgeTap}>
+          <svg class="pill-leader" width="${boxW}" height="${boxH}">
+            <line x1="${pillW - 2}" y1="${pillH - 2}" x2="${dotX}" y2="${dotY}"
+                  stroke="${this.color}" stroke-width="1.5"></line>
+            <circle cx="${dotX}" cy="${dotY}" r="2.5" fill="${this.color}"></circle>
+          </svg>
+          ${pill}
+        </div>
+      `;
+    }
     return b`
         <div
           class="marker ${this.picture ? "picture" : ""}  ${this.extraCssClasses ? this.extraCssClasses : ""}"
           style="border-color: ${this.color}; height: ${this.size}px; width: ${this.size}px;"
           @click=${this._badgeTap}
-          title="${this.tooltip}"
           >
           ${this._inner()}
         </div>
@@ -20474,8 +20847,7 @@ class MapCardEntityMarker extends i {
 
   _inner() {
     if(this.picture) {
-      // Show picture with optional label overlay
-      const hasLabel = this.title && (this.prefix || this.suffix || this.title.trim());
+      const hasLabel = shouldOverlayPictureLabel(this.prefix, this.suffix, this.label);
       return b`
         <div class="entity-picture" style="background-image: url(${this.picture})"></div>
         ${hasLabel ? b`
@@ -20488,7 +20860,7 @@ class MapCardEntityMarker extends i {
       `;
     }
     if(this.icon) {
-      return b`<ha-icon icon="${this.icon}" style="--icon-primary-color: ${this.color}; --mdc-icon-size: ${this.size - 10}px;">icon</ha-icon>`
+      return b`<ha-icon icon="${this.icon}" style="color: ${this.color}; --icon-primary-color: ${this.color}; --mdc-icon-size: ${this.size - 10}px;">icon</ha-icon>`
     }
     if (!this.prefix && !this.suffix) {
       return this.title;
@@ -20549,6 +20921,53 @@ class MapCardEntityMarker extends i {
       .suffix {
         margin-left: var(--ha-marker-suffix-margin, 2px);
       }
+      .place-pill-wrap {
+        position: relative;
+      }
+      .pill-leader {
+        position: absolute;
+        left: 0;
+        top: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .place-pill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        box-sizing: border-box;
+        padding: 3px 5px;
+        border-radius: 999px;
+        border: 1px solid var(--ha-marker-color, var(--primary-color));
+        background-color: var(--card-background-color);
+        font-size: var(--ha-marker-font-size, 1.5em);
+        white-space: nowrap;
+      }
+      .place-pill .pill-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        border-radius: 50%;
+        border: 1px solid var(--ha-marker-color, var(--primary-color));
+        background-color: var(--card-background-color);
+        color: var(--primary-text-color);
+        flex: 0 0 auto;
+      }
+      .place-pill .pill-initials {
+        font-weight: 700;
+        text-align: center;
+        line-height: 1;
+      }
+      .place-pill.dark,
+      .place-pill.dark .pill-badge {
+        color: #ffffff;
+        background: #1c1c1c;
+      }
     `;
   }
 }
@@ -20557,7 +20976,7 @@ if (!customElements.get("map-card")) {
   customElements.define("map-card", MapCard);
   customElements.define("map-card-entity-marker", MapCardEntityMarker);
   console.info(
-    `%cnathan-gs/ha-map-card: 1.15.0`,
+    `%cnathan-gs/ha-map-card: 1.16.0`,
     'color: orange; font-weight: bold; background: black'
   );
 }
