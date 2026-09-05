@@ -61,12 +61,7 @@ automation:
               - action: light.turn_on
                 target:
                   entity_id:
-                    - light.ash_s_fan_light_1
-                    - light.ash_s_fan_light_2
-                    - light.ash_s_fan_light_3
-                    - light.ash_s_fan_light_4
-                    - light.ash_s_fan_light_5
-                    - light.ash_s_fan_light_6
+                    - light.ash_s_fan_lights
                 data:
                   brightness_pct: 100
 
@@ -78,12 +73,7 @@ automation:
               - action: light.turn_off
                 target:
                   entity_id:
-                    - light.ash_s_fan_light_1
-                    - light.ash_s_fan_light_2
-                    - light.ash_s_fan_light_3
-                    - light.ash_s_fan_light_4
-                    - light.ash_s_fan_light_5
-                    - light.ash_s_fan_light_6
+                    - light.ash_s_fan_lights
 
           # Brightness up (hold top button)
           - conditions:
@@ -93,12 +83,7 @@ automation:
               - action: script.ramp_light_brightness
                 data:
                   entity_id:
-                    - light.ash_s_fan_light_1
-                    - light.ash_s_fan_light_2
-                    - light.ash_s_fan_light_3
-                    - light.ash_s_fan_light_4
-                    - light.ash_s_fan_light_5
-                    - light.ash_s_fan_light_6
+                    - light.ash_s_fan_lights
                   reference_light: light.ash_s_fan_light_1
                   direction: up
 
@@ -110,12 +95,7 @@ automation:
               - action: script.ramp_light_brightness
                 data:
                   entity_id:
-                    - light.ash_s_fan_light_1
-                    - light.ash_s_fan_light_2
-                    - light.ash_s_fan_light_3
-                    - light.ash_s_fan_light_4
-                    - light.ash_s_fan_light_5
-                    - light.ash_s_fan_light_6
+                    - light.ash_s_fan_lights
                   reference_light: light.ash_s_fan_light_1
                   direction: down
 
@@ -141,12 +121,7 @@ automation:
               - action: script.cycle_light_color
                 data:
                   entity_id:
-                    - light.ash_s_fan_light_1
-                    - light.ash_s_fan_light_2
-                    - light.ash_s_fan_light_3
-                    - light.ash_s_fan_light_4
-                    - light.ash_s_fan_light_5
-                    - light.ash_s_fan_light_6
+                    - light.ash_s_fan_lights
                   reference_light: light.ash_s_fan_light_1
                   direction: forward
 
@@ -158,11 +133,6 @@ automation:
               - action: script.cycle_light_color
                 data:
                   entity_id:
-                    - light.ash_s_fan_light_1
-                    - light.ash_s_fan_light_2
-                    - light.ash_s_fan_light_3
-                    - light.ash_s_fan_light_4
-                    - light.ash_s_fan_light_5
-                    - light.ash_s_fan_light_6
+                    - light.ash_s_fan_lights
                   reference_light: light.ash_s_fan_light_1
                   direction: backward
