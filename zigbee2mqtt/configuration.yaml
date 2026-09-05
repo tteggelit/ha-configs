@@ -37,8 +37,7 @@ mqtt:
   user: '!secrets.yaml mqtt_user'
   password: '!secrets.yaml mqtt_password'
 serial:
-  port: >-
-    /dev/serial/by-id/usb-SONOFF_SONOFF_Dongle_Plus_MG24_8a67434f64a3ef11a7ef4ebd61ce3355-if00-port0
+  port: /dev/serial/by-id/usb-SONOFF_SONOFF_Dongle_Plus_MG24_8a67434f64a3ef11a7ef4ebd61ce3355-if00-port0
   adapter: ember
 frontend:
   enabled: true
