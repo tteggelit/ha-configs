@@ -1267,8 +1267,9 @@ script:
     use_blueprint:
       path: cycle_soak_watering.yaml
       input:
-        valve_entity: valve.back_vegetable_garden_timer_zone
+        valve_entity: switch.back_vegetable_garden_faucet_valve
         zone_name: Back Vegetable Garden
+        timer_type: standard
         notify_on_completion: true
 
   side_vegetable_garden_irrigation:
@@ -1276,8 +1277,9 @@ script:
     use_blueprint:
       path: cycle_soak_watering.yaml
       input:
-        valve_entity: valve.vegetable_garden_timer_vegetable_garden_zone
+        valve_entity: switch.side_vegetable_garden_faucet_valve
         zone_name: Side Vegetable Garden
+        timer_type: standard
         notify_on_completion: true
 
   front_garden_irrigation:
@@ -1708,13 +1710,13 @@ automation:
                and total | int(0) > 0 }}
 
       # ── Defensively close every zone valve (CONFIGURE entity IDs) ─────────
-      - action: valve.close_valve
+      - action: switch.turn_off
         target:
-          entity_id: valve.back_vegetable_garden_timer_zone
+          entity_id: switch.back_vegetable_garden_faucet_valve
         continue_on_error: true
-      - action: valve.close_valve
+      - action: switch.turn_off
         target:
-          entity_id: valve.vegetable_garden_timer_vegetable_garden_zone
+          entity_id: switch.side_vegetable_garden_faucet_valve
         continue_on_error: true
       - action: switch.turn_off
         target:
