@@ -16,8 +16,9 @@ blueprint:
       - Per-minute valve state monitoring — alerts if valve closes prematurely
       - Availability check at startup — alerts if valve is unavailable/unknown
       - Optional completion notification
-      - Notifications via notify.send_message targeting entity IDs resolved from
-        sensor.irrigation_notify_targets_resolved (see irrigation package)
+      - Notifications via notify.send_message targeting notify entity IDs
+        resolved from sensor.irrigation_notify_targets_resolved (see
+        irrigation package) -- e.g. notify.tis_iphone
 
     Architecture notes:
       - Blueprint inputs used inside Jinja2 template strings are pulled into a

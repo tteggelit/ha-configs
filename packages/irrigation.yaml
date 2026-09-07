@@ -445,7 +445,8 @@ template:
       # NOTIFY TARGETS RESOLVER
       #
       # Maps the human-readable selection from input_select.irrigation_notify_device
-      # to one or more notify entity IDs.
+      # to one or more notify entity IDs (e.g. notify.tis_iphone) -- these are
+      # mobile_app's notify domain entities, targeted via notify.send_message.
       #
       # State:      JSON list of resolved notify entity IDs (as a string)
       # Attribute:  targets — Python list, directly usable in for_each templates
@@ -465,14 +466,14 @@ template:
         state: >
           {% set device_map = {
             "All Devices": [
-              "notify.mobile_app_tis_iphone",
-              "notify.mobile_app_amys_iphone"
+              "notify.tis_iphone",
+              "notify.amys_iphone"
             ],
             "Ti's iPhone": [
-              "notify.mobile_app_tis_iphone"
+              "notify.tis_iphone"
             ],
             "Amy's iPhone": [
-              "notify.mobile_app_amys_iphone"
+              "notify.amys_iphone"
             ],
             "None": []
           } %}
@@ -483,14 +484,14 @@ template:
           targets: >
             {% set device_map = {
               "All Devices": [
-                "notify.mobile_app_tis_iphone",
-                "notify.mobile_app_amys_iphone"
+                "notify.tis_iphone",
+                "notify.amys_iphone"
               ],
               "Ti's iPhone": [
-                "notify.mobile_app_tis_iphone"
+                "notify.tis_iphone"
               ],
               "Amy's iPhone": [
-                "notify.mobile_app_amys_iphone"
+                "notify.amys_iphone"
               ],
               "None": []
             } %}
@@ -1298,9 +1299,10 @@ script:
 #
 # Notification pattern used throughout:
 #   state_attr('sensor.irrigation_notify_targets_resolved', 'targets') returns
-#   a list of notify entity IDs based on the current input_select selection.
-#   repeat.for_each iterates this list, sending one notify.send_message per
-#   target. When "None" is selected the list is empty and no notifications fire.
+#   a list of notify entity IDs (e.g. notify.tis_iphone) based on the current
+#   input_select selection. repeat.for_each iterates this list, sending one
+#   notify.send_message per target, with the entity_id as the target When
+#   "None" is selected the list is empty and no notifications fire.
 # =============================================================================
 
 automation:
@@ -1850,7 +1852,8 @@ automation:
   # QUORUM FAULT NOTIFICATIONS
   #
   # Reads resolved notify targets from the template sensor attribute 'targets',
-  # which returns a list of entity IDs based on input_select.irrigation_notify_device.
+  # which returns a list of notify entity IDs based on
+  # input_select.irrigation_notify_device.
   # When "None" is selected the list is empty and no notifications fire.
   # ===========================================================================
 

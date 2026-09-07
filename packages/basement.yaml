@@ -15,7 +15,10 @@ automation:
       trigger: state
     conditions: []
     actions:
-    - data:
+    - action: notify.send_message
+      target:
+        entity_id: notify.tis_iphone
+      data:
         message: Basement freezer left open
         data:
           push:
@@ -23,5 +26,4 @@ automation:
               name: default
               critical: 1
               volume: 1
-      action: notify.mobile_app_tis_iphone
     mode: single

@@ -186,7 +186,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_west_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Distant Storm Warning (Des Moines, IA)"
                         message: "Confirmed storm w/ lightning near Des Moines, IA, moving east. Estimated arrival in 4-6 hours. Time for meds!"
@@ -219,7 +221,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_west_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Approaching Storm (Quad Cities, IA)"
                         message: "Confirmed storm w/ lightning near the Quad Cities, IA, moving east. Estimated arrival in 2-3 hours."
@@ -252,7 +256,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_west_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Nearby Storm (Dixon, IL)"
                         message: "Confirmed storm w/ lightning near Dixon, IL. Estimated arrival in about 1 hour."
@@ -285,7 +291,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_southwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Distant Storm Warning (St. Louis, MO)"
                         message: "Confirmed storm w/ lightning near St. Louis, MO, moving northeast. Estimated arrival in 3-5 hours. Time for meds!"
@@ -318,7 +326,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_southwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Approaching Storm (Springfield, IL)"
                         message: "Confirmed storm w/ lightning near Springfield, IL, moving northeast. Estimated arrival in 1.5-2.5 hours."
@@ -351,7 +361,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_southwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Nearby Storm (Pontiac, IL)"
                         message: "Confirmed storm w/ lightning near Pontiac, IL. Estimated arrival in about 45 minutes."
@@ -384,7 +396,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_northwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Distant Storm Warning (Minneapolis, MN)"
                         message: "Confirmed storm w/ lightning near Minneapolis, MN, moving southeast. Estimated arrival in 4-6 hours. Time for meds!"
@@ -417,7 +431,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_northwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Approaching Storm (La Crosse, WI)"
                         message: "Confirmed storm w/ lightning over La Crosse, WI, moving southeast. Estimated arrival in 2-3 hours."
@@ -450,7 +466,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_northwest_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "Nearby Storm (Platteville, WI)"
                         message: "Confirmed storm w/ lightning near Platteville, WI. Estimated arrival in about 1 hour."
@@ -483,7 +501,9 @@ automation:
                       (as_timestamp(now()) - as_timestamp(states('input_datetime.lightning_detection_last_home_alert') | default(0))) > 3600
                     ) }}
                   sequence:
-                    - action: notify.mobile_app_tis_iphone
+                    - action: notify.send_message
+                      target:
+                        entity_id: notify.tis_iphone
                       data:
                         title: "⚡ Thunderstorm Starting!"
                         message: "Lightning detected within 25 km. The storm is here."

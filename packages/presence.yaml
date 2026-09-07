@@ -29,7 +29,9 @@ automation:
         entity_id: 82547043c87592e35391f94b52bc7d8c
         type: is_not_home
     actions:
-    - action: notify.mobile_app_tis_iphone
+    - action: notify.send_message
+      target:
+        entity_id: notify.tis_iphone
       data:
         message: Amy and Ti left home
     mode: single

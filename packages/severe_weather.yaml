@@ -470,11 +470,11 @@ script:
           target_devices: >
             {% set setting = states('input_select.nws_mobile_devices_critical') if severity in ['Extreme', 'Severe'] else states('input_select.nws_mobile_devices_normal') %}
             {% if setting == 'All Devices' %}
-              notify.mobile_app_tis_iphone,notify.mobile_app_amys_iphone
+              notify.tis_iphone,notify.amys_iphone
             {% elif setting == "Ti's iPhone" %}
-              notify.mobile_app_tis_iphone
+              notify.tis_iphone
             {% elif setting == "Amy's iPhone" %}
-              notify.mobile_app_amys_iphone
+              notify.amys_iphone
             {% else %}
               none
             {% endif %}
@@ -486,7 +486,9 @@ script:
           - repeat:
               for_each: "{{ target_devices.split(',') }}"
               sequence:
-                - action: "{{ repeat.item }}"
+                - action: notify.send_message
+                  target:
+                    entity_id: "{{ repeat.item }}"
                   data:
                     title: "{{ severity_icon }} {{ event_type }}"
                     message: "{{ description }}"
@@ -754,9 +756,8 @@ automation:
             sequence:
               # Send full details to the device that requested it.
               # trigger.event.data.device_id is a device-registry UUID, not
-              # a slug -- it can't be regex-sanitized into a valid
-              # notify.mobile_app_* service name (that was silently broken
-              # before). Map the known device_ids to their real notify
+              # a slug -- it can't be regex-sanitized into a valid notify
+              # entity ID. Map the known device_ids to their real notify
               # targets instead.
               #
               # To add a new device here:
@@ -772,14 +773,16 @@ automation:
               #      trigger.event.data.device_id will hold here.
               - variables:
                   device_notify_map:
-                    c649c07764020e9d99e38656cf640e62: notify.mobile_app_tis_iphone
-                    ba46bf63c37c0f5c0e4c054b5d7286c7: notify.mobile_app_amys_iphone
+                    c649c07764020e9d99e38656cf640e62: notify.tis_iphone
+                    ba46bf63c37c0f5c0e4c054b5d7286c7: notify.amys_iphone
                   requesting_notify_target: "{{ device_notify_map.get(trigger.event.data.device_id) }}"
               - if:
                   - condition: template
                     value_template: "{{ requesting_notify_target is not none }}"
                 then:
-                  - action: "{{ requesting_notify_target }}"
+                  - action: notify.send_message
+                    target:
+                      entity_id: "{{ requesting_notify_target }}"
                     data:
                       title: "Full Alert Details"
                       message: >

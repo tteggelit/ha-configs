@@ -126,7 +126,9 @@ script:
             entity_id: binary_sensor.front_door_sensor
             state: 'on'
         then:
-          - metadata: {}
+          - action: notify.send_message
+            target:
+              entity_id: notify.tis_iphone
             data:
               message: Front door is open!
               data:
@@ -135,8 +137,9 @@ script:
                     name: default
                     critical: 1
                     volume: 1
-            action: notify.mobile_app_tis_iphone
-          - metadata: {}
+          - action: notify.send_message
+            target:
+              entity_id: notify.amys_iphone
             data:
               message: Front door is open!
               data:
@@ -145,7 +148,6 @@ script:
                     name: default
                     critical: 1
                     volume: 1
-            action: notify.mobile_app_amys_iphone
         else:
           - if:
               - condition: state
@@ -170,7 +172,9 @@ script:
                     state:
                       - unlocked
                 then:
-                  - metadata: {}
+                  - action: notify.send_message
+                    target:
+                      entity_id: notify.tis_iphone
                     data:
                       message: Front door unlocked!
                       data:
@@ -179,8 +183,9 @@ script:
                             name: default
                             critical: 1
                             volume: 1
-                    action: notify.mobile_app_tis_iphone
-                  - metadata: {}
+                  - action: notify.send_message
+                    target:
+                      entity_id: notify.amys_iphone
                     data:
                       message: Front door unlocked!
                       data:
@@ -189,7 +194,6 @@ script:
                             name: default
                             critical: 1
                             volume: 1
-                    action: notify.mobile_app_amys_iphone
     mode: single
   secure_garage:
     alias: Secure Garage
@@ -218,7 +222,9 @@ script:
                 entity_id: cover.garage_door
                 state: open
             then:
-              - metadata: {}
+              - action: notify.send_message
+                target:
+                  entity_id: notify.tis_iphone
                 data:
                   message: Garage door is open!
                   data:
@@ -227,8 +233,9 @@ script:
                         name: default
                         critical: 1
                         volume: 1
-                action: notify.mobile_app_tis_iphone
-              - metadata: {}
+              - action: notify.send_message
+                target:
+                  entity_id: notify.amys_iphone
                 data:
                   message: Garage door is open!
                   data:
@@ -237,7 +244,6 @@ script:
                         name: default
                         critical: 1
                         volume: 1
-                action: notify.mobile_app_amys_iphone
     mode: single
   notify_third_car_garage_open:
     alias: Notify If Third Car Garage Door Is Open
@@ -250,7 +256,9 @@ script:
             state:
               - 'on'
         then:
-          - metadata: {}
+          - action: notify.send_message
+            target:
+              entity_id: notify.tis_iphone
             data:
               message: Third car garage door is open!
               data:
@@ -259,8 +267,9 @@ script:
                     name: default
                     critical: 1
                     volume: 1
-            action: notify.mobile_app_tis_iphone
-          - metadata: {}
+          - action: notify.send_message
+            target:
+              entity_id: notify.amys_iphone
             data:
               message: Third car garage door is open!
               data:
@@ -269,7 +278,6 @@ script:
                     name: default
                     critical: 1
                     volume: 1
-            action: notify.mobile_app_amys_iphone
     mode: single
   turn_off_house_tvs:
     alias: Turn Off House TVs

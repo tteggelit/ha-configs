@@ -72,11 +72,13 @@ script:
       - condition: template
         value_template: '{{ new_todos | length > 0 }}'
       then:
-      - data:
+      - action: notify.send_message
+        target:
+          entity_id: notify.tis_iphone
+        data:
           message: '{{ new_todos | join(''
 
             '') }}'
-        action: notify.mobile_app_tis_iphone
     - repeat:
         for_each: '{{ new_todos }}'
         sequence:
