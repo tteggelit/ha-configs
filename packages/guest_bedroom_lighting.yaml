@@ -1,0 +1,73 @@
+# Guest bedroom ceiling fan switch: keeps its 7-segment LED indicator
+# bar's "Default LED Strip Intensity When On" parameters matched to
+# ambient light in the room, so the LEDs aren't blindingly bright at
+# night. Only the "when on" intensity parameters are touched here --
+# the separate "when off" ones are left alone. Per-LED values can be
+# set at any time regardless of whether the switch/fan is currently on;
+# they simply take effect the next time the switch's LEDs light up.
+#
+# The mapping from illuminance to LED level uses a log scale rather
+# than linear, since the low end of the lux range (1 lx dark, ~6 lx
+# room lights at night) needs more resolution than the high end
+# (13-60+ lx daylight) -- a linear map would compress the whole
+# low-light range into a step or two. Tune lux_floor/lux_ceiling below
+# if the resulting brightness feels off in practice.
+switch:
+  - platform: flux
+    lights:
+      - light.guest_bedroom_lights
+    name: Guest Bedroom Flux
+    start_time: "8:00"
+    stop_time: "23:00"
+    start_colortemp: 6600
+    sunset_colortemp: 3200
+    stop_colortemp: 2800
+    brightness: 255
+    disable_brightness_adjust: true
+    mode: mired
+    transition: 30
+    interval: 60
+
+automation:
+  - id: guest_bedroom_fan_switch_led_brightness_by_illuminance
+    alias: "Guest Bedroom Fan Switch — LED Brightness by Illuminance"
+    description: >-
+      Scales each of the fan switch's 7 "intensity when on" LED number
+      entities to sensor.guest_bedroom_light_switch_illuminance.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: sensor.guest_bedroom_light_switch_illuminance
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unknown', 'unavailable', 'none'] }}"
+    actions:
+      - variables:
+          lux: "{{ trigger.to_state.state | float(0) }}"
+          lux_floor: 0
+          lux_ceiling: 60
+      - repeat:
+          for_each: [1, 2, 3, 4, 5, 6, 7]
+          sequence:
+            - variables:
+                led_entity: "{{ 'number.guest_bedroom_fan_switch_defaultled' ~ repeat.item ~ 'intensitywhenon' }}"
+                led_min: "{{ state_attr(led_entity, 'min') | float(0) }}"
+                led_max: "{{ state_attr(led_entity, 'max') | float(101) }}"
+                target_level: >-
+                  {{ [[ (
+                         led_min + (
+                           (log(lux + 1) - log(lux_floor + 1)) /
+                           (log(lux_ceiling + 1) - log(lux_floor + 1))
+                         ) * (led_max - led_min)
+                       ) | round(0), led_min ] | max, led_max ] | min }}
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ states(led_entity) not in ['unknown', 'unavailable'] and
+                       states(led_entity) | int(-1) != target_level | int }}
+              then:
+                - action: number.set_value
+                  target:
+                    entity_id: "{{ led_entity }}"
+                  data:
+                    value: "{{ target_level }}"
