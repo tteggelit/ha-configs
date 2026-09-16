@@ -22,7 +22,8 @@ esp32:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    encryption:
+      key: !secret api_key
 
 logger:
 #  level: DEBUG
