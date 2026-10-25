@@ -106,6 +106,7 @@ automation:
     - action: script.notify_third_car_garage_open
     - action: script.turn_off_house_tvs
     - action: script.house_lights_off
+    - action: script.decorations_off
     - metadata: {}
       data: {}
       target:

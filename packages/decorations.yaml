@@ -1,0 +1,93 @@
+# Holiday decorations
+#
+# All switching is done by the scripts below so other automations can drive
+# the decorations off their own triggers without duplicating the target
+# lists.
+
+script:
+  decorations_on:
+    alias: Decorations On
+    description: >-
+      Turn on all holiday decorations.
+    sequence:
+    - action: switch.turn_on
+      metadata: {}
+      target:
+        entity_id:
+        - switch.studio_window_lights_outlet
+        - switch.front_decorations
+        - switch.loft_window_lights_outlet
+        - switch.daylan_s_bedroom_window_lights_outlet
+        - switch.ash_s_bedroom_window_lights_outlet
+      data: {}
+    mode: single
+
+  decorations_off_late:
+    alias: Decorations Off (Late)
+    description: >-
+      Turn off the decorations that stay on until late.
+    sequence:
+    - action: switch.turn_off
+      metadata: {}
+      target:
+        entity_id:
+        - switch.studio_window_lights_outlet
+        - switch.front_decorations
+        - switch.loft_window_lights_outlet
+      data: {}
+    mode: single
+
+  decorations_off_early:
+    alias: Decorations Off (Early)
+    description: >-
+      Turn off the decorations that go off early.
+    sequence:
+    - action: switch.turn_off
+      metadata: {}
+      target:
+        entity_id:
+        - switch.daylan_s_bedroom_window_lights_outlet
+        - switch.ash_s_bedroom_window_lights_outlet
+      data: {}
+    mode: single
+
+  decorations_off:
+    alias: Decorations Off
+    description: >-
+      Turn off all holiday decorations.
+    sequence:
+    - action: script.decorations_off_early
+    - action: script.decorations_off_late
+    mode: single
+
+automation:
+  - id: '1791754729354'
+    alias: Turn On Decorations
+    description: Turn on all holiday decorations at sunset
+    triggers:
+      - trigger: sun
+        event: sunset
+        offset: 0
+    actions:
+      - action: script.decorations_on
+    mode: single
+
+  - id: '1791754856106'
+    alias: Turn Off Decorations (Early)
+    description: Turn off the early decorations
+    triggers:
+      - trigger: time
+        at: '20:45:00'
+    actions:
+      - action: script.decorations_off_early
+    mode: single
+
+  - id: '1791754801973'
+    alias: Turn Off Decorations (Late)
+    description: Turn off the late decorations
+    triggers:
+      - trigger: time
+        at: '22:30:00'
+    actions:
+      - action: script.decorations_off_late
+    mode: single
