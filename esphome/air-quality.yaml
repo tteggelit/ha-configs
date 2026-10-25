@@ -7,6 +7,9 @@ esp32:
   cpu_frequency: 160MHZ
   framework:
     type: arduino
+    advanced:
+      sram1_as_iram: true
+      flash_chip: generic
 
 i2c:
   sda: GPIO21

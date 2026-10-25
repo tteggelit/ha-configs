@@ -19,6 +19,7 @@ esp32:
     type: esp-idf
     advanced:
       sram1_as_iram: true
+      flash_chip: generic
 
 ota:
   - platform: esphome
