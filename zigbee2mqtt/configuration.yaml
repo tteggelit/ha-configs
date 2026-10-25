@@ -211,6 +211,10 @@ devices:
     friendly_name: Side Vegetable Garden Moisture Sensor 1
   '0x103597000016b3d7':
     friendly_name: Playroom Cabinet Lights Remote
+  '0x6083dafffef521f3':
+    friendly_name: Side Vegetable Garden Faucet Valve
+  '0xe07291fffe2f8043':
+    friendly_name: Back Vegetable Garden Faucet Valve
 groups:
   '1':
     friendly_name: Guest Bedroom Lights
