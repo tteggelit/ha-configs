@@ -21,8 +21,9 @@
 #        - Update the device_map dict to map those names to notify entity IDs
 #
 #   2. CONFIGURE: Required integrations
-#      weather.klot  — NWS hourly (primary forecast)
-#      weather.forecast_home  — Met.no (secondary forecast)
+#      weather.openweathermap  — OWM hourly (primary forecast: probability + amount)
+#      weather.klot  — NWS hourly (probability only; also "raining now")
+#      weather.forecast_home  — Met.no (amount only)
 #      Confirm these entity IDs match your HA instance.
 #
 # ── Required scripts (created separately from the Cycle & Soak blueprint) ─────
@@ -439,6 +440,109 @@ template:
           precip_48h: "{{ met_precip_48h_calc | float(0) }}"
           imminent_heavy_rain_24h: "{{ met_imminent_heavy_rain_calc }}"
 
+  # OpenWeatherMap is the only configured source whose hourly entries carry
+  # BOTH precipitation_probability and precipitation (amount) — NWS has no
+  # amount and Met.no has no probability. Its hourly forecast covers 48h,
+  # enough for both windows below.
+  - triggers:
+      - trigger: time_pattern
+        hours: "/1"
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_button.irrigation_refresh_forecast_cache
+    actions:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay:
+              seconds: 45
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.openweathermap
+        data:
+          type: hourly
+        response_variable: owm_data
+        continue_on_error: true
+      - variables:
+          owm_ok: >
+            {{ owm_data is defined and owm_data is mapping
+               and 'weather.openweathermap' in owm_data
+               and owm_data['weather.openweathermap'].get('forecast') is not none }}
+          owm_raw: >
+            {{ owm_data['weather.openweathermap'].forecast if owm_ok else [] }}
+          owm_prob_24h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(max=0) %}
+            {% for f in owm_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% if p > ns.max %}{% set ns.max = p %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.max }}
+          owm_precip_24h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(tot=0) %}
+            {% for f in owm_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set ns.tot = ns.tot + (f.get('precipitation', 0) | float(0)) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.tot | round(2) }}
+          owm_prob_48h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set h48 = now_ts + 172800 %}
+            {% set ns = namespace(max=0) %}
+            {% for f in owm_raw %}
+              {% set ft = as_timestamp(f.datetime) %}
+              {% if ft > h24 and ft <= h48 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% if p > ns.max %}{% set ns.max = p %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.max }}
+          owm_precip_48h_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set h48 = now_ts + 172800 %}
+            {% set ns = namespace(tot=0) %}
+            {% for f in owm_raw %}
+              {% set ft = as_timestamp(f.datetime) %}
+              {% if ft > h24 and ft <= h48 %}
+                {% set ns.tot = ns.tot + (f.get('precipitation', 0) | float(0)) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.tot | round(2) }}
+          owm_imminent_heavy_rain_calc: >
+            {% set now_ts = now().timestamp() %}
+            {% set h24 = now_ts + 86400 %}
+            {% set ns = namespace(found=false) %}
+            {% for f in owm_raw %}
+              {% if as_timestamp(f.datetime) <= h24 %}
+                {% set p = f.get('precipitation_probability', 0) | int(0) %}
+                {% set a = f.get('precipitation', 0) | float(0) %}
+                {% if p > 80 and a > 0.5 %}{% set ns.found = true %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.found }}
+    sensor:
+      - name: "Irrigation OWM Forecast Cache"
+        unique_id: irrigation_owm_forecast_cache
+        icon: mdi:weather-cloudy-clock
+        state: "{{ now().isoformat() }}"
+        attributes:
+          data_ok: "{{ owm_ok }}"
+          prob_24h: "{{ owm_prob_24h_calc | int(0) }}"
+          precip_24h: "{{ owm_precip_24h_calc | float(0) }}"
+          prob_48h: "{{ owm_prob_48h_calc | int(0) }}"
+          precip_48h: "{{ owm_precip_48h_calc | float(0) }}"
+          imminent_heavy_rain_24h: "{{ owm_imminent_heavy_rain_calc }}"
+
   - sensor:
 
       # =======================================================================
@@ -824,54 +928,78 @@ template:
 
       # =======================================================================
       # WEATHER DECISION SENSOR
-      # Primary:   weather.klot (NWS)
-      # Secondary: weather.forecast_home (Met.no)
-      # Aggressive policy: both sources must agree for rain_factor > 0.
+      # Each source only contributes the fields it actually provides:
+      #   weather.openweathermap (OWM) — probability AND amount (primary)
+      #   weather.klot (NWS)           — probability only (no amount key)
+      #   weather.forecast_home (Met)  — amount only (no probability key)
+      # Requiring a field from a source that never supplies it is what kept
+      # this sensor pinned at 0 before OWM was added.
       #
-      # Reads forecast data from sensor.irrigation_nws_forecast_cache and
-      # sensor.irrigation_met_no_forecast_cache — trigger-based sensors defined
-      # below that call weather.get_forecasts hourly. This avoids relying on
-      # the deprecated forecast attribute on weather entities (removed in
-      # HA 2024.3+).
+      # Policy: OWM must clear both a probability and an amount threshold,
+      # AND at least one independent source must agree (NWS on probability
+      # or Met.no on amount). If OWM's fetch failed (data_ok false), fall
+      # back to NWS probability + Met.no amount.
+      #
+      # Reads forecast data from the trigger-based cache sensors above
+      # (sensor.irrigation_{owm,nws,met_no}_forecast_cache), which call
+      # weather.get_forecasts hourly. This avoids relying on the deprecated
+      # forecast attribute on weather entities (removed in HA 2024.3+).
       # =======================================================================
 
       - name: "Irrigation Rain Factor"
         unique_id: irrigation_rain_factor
         icon: mdi:weather-rainy
         state: >
+          {% set owm_ok = state_attr('sensor.irrigation_owm_forecast_cache', 'data_ok') | bool(false) %}
+          {% set owm_prob24 = state_attr('sensor.irrigation_owm_forecast_cache', 'prob_24h') | int(0) %}
+          {% set owm_prec24 = state_attr('sensor.irrigation_owm_forecast_cache', 'precip_24h') | float(0) %}
+          {% set owm_prob48 = state_attr('sensor.irrigation_owm_forecast_cache', 'prob_48h') | int(0) %}
+          {% set owm_prec48 = state_attr('sensor.irrigation_owm_forecast_cache', 'precip_48h') | float(0) %}
           {% set nws_prob24 = state_attr('sensor.irrigation_nws_forecast_cache', 'prob_24h') | int(0) %}
-          {% set nws_prec24 = state_attr('sensor.irrigation_nws_forecast_cache', 'precip_24h') | float(0) %}
           {% set nws_prob48 = state_attr('sensor.irrigation_nws_forecast_cache', 'prob_48h') | int(0) %}
-          {% set nws_prec48 = state_attr('sensor.irrigation_nws_forecast_cache', 'precip_48h') | float(0) %}
-          {% set met_prob24 = state_attr('sensor.irrigation_met_no_forecast_cache', 'prob_24h') | int(0) %}
           {% set met_prec24 = state_attr('sensor.irrigation_met_no_forecast_cache', 'precip_24h') | float(0) %}
-          {% set met_prob48 = state_attr('sensor.irrigation_met_no_forecast_cache', 'prob_48h') | int(0) %}
           {% set met_prec48 = state_attr('sensor.irrigation_met_no_forecast_cache', 'precip_48h') | float(0) %}
-          {% if nws_prob24 > 70 and nws_prec24 > 0.25
-             and met_prob24 > 70 and met_prec24 > 0.25 %}
-            2
-          {% elif nws_prob24 > 40 and nws_prec24 > 0.25
-              and met_prob24 > 40 and met_prec24 > 0.25 %}
-            1
-          {% elif nws_prob48 > 70 and nws_prec48 > 0.25
-              and met_prob48 > 70 and met_prec48 > 0.25 %}
-            1
+          {% if owm_ok %}
+            {% if owm_prob24 > 70 and owm_prec24 > 0.25
+               and (nws_prob24 > 50 or met_prec24 > 0.15) %}
+              2
+            {% elif owm_prob24 > 40 and owm_prec24 > 0.15
+                and (nws_prob24 > 40 or met_prec24 > 0.10) %}
+              1
+            {% elif owm_prob48 > 70 and owm_prec48 > 0.25
+                and (nws_prob48 > 50 or met_prec48 > 0.15) %}
+              1
+            {% else %}
+              0
+            {% endif %}
           {% else %}
-            0
+            {% if nws_prob24 > 70 and met_prec24 > 0.25 %}
+              2
+            {% elif nws_prob24 > 40 and met_prec24 > 0.15 %}
+              1
+            {% elif nws_prob48 > 70 and met_prec48 > 0.25 %}
+              1
+            {% else %}
+              0
+            {% endif %}
           {% endif %}
         attributes:
+          owm_prob_24h: >
+            {{ state_attr('sensor.irrigation_owm_forecast_cache', 'prob_24h') | int(0) }}
+          owm_precip_24h: >
+            {{ state_attr('sensor.irrigation_owm_forecast_cache', 'precip_24h') | float(0) }}
           nws_prob_24h: >
             {{ state_attr('sensor.irrigation_nws_forecast_cache', 'prob_24h') | int(0) }}
-          nws_precip_24h: >
-            {{ state_attr('sensor.irrigation_nws_forecast_cache', 'precip_24h') | float(0) }}
-          met_prob_24h: >
-            {{ state_attr('sensor.irrigation_met_no_forecast_cache', 'prob_24h') | int(0) }}
           met_precip_24h: >
             {{ state_attr('sensor.irrigation_met_no_forecast_cache', 'precip_24h') | float(0) }}
+          owm_data_ok: >
+            {{ state_attr('sensor.irrigation_owm_forecast_cache', 'data_ok') }}
           nws_data_ok: >
             {{ state_attr('sensor.irrigation_nws_forecast_cache', 'data_ok') }}
           met_data_ok: >
             {{ state_attr('sensor.irrigation_met_no_forecast_cache', 'data_ok') }}
+          owm_last_updated: >
+            {{ states('sensor.irrigation_owm_forecast_cache') }}
           nws_last_updated: >
             {{ states('sensor.irrigation_nws_forecast_cache') }}
           met_last_updated: >
@@ -939,6 +1067,59 @@ template:
       # =======================================================================
       # (end of sensor list)
       # =======================================================================
+
+    binary_sensor:
+
+      # =======================================================================
+      # RAINING NOW
+      # Current condition from the two observation-backed sources: NWS
+      # (KLOT station) and OWM. Met.no's "current" condition is model output,
+      # not an observation, so it's left out. delay_off keeps a short lull
+      # between showers from reading as "stopped raining".
+      # Used as a start gate and a between-cycle stop check.
+      # =======================================================================
+
+      - name: "Irrigation Raining Now"
+        unique_id: irrigation_raining_now
+        icon: mdi:weather-pouring
+        delay_off:
+          minutes: 30
+        state: >
+          {% set wet = ['rainy', 'pouring', 'lightning-rainy', 'snowy-rainy', 'hail'] %}
+          {{ states('weather.klot') in wet or states('weather.openweathermap') in wet }}
+        attributes:
+          nws_condition: "{{ states('weather.klot') }}"
+          owm_condition: "{{ states('weather.openweathermap') }}"
+
+      # =======================================================================
+      # PER-ZONE SATISFIED
+      # On when the zone's urgency has dropped to ≤ 0 (soil wet enough and/or
+      # enough rain forecast). Checked between cycles so a run that started
+      # at urgency 1 stops once earlier cycles (or rain) have done the job.
+      # Unknown urgency (sensor quorum lost) reads as off — don't abort a run
+      # on missing data.
+      # =======================================================================
+
+      - name: "Back Garden Irrigation Satisfied"
+        unique_id: back_garden_irrigation_satisfied
+        icon: mdi:sprout
+        state: >
+          {% set u = states('sensor.back_garden_irrigation_urgency') %}
+          {{ u | is_number and u | int <= 0 }}
+
+      - name: "Side Garden Irrigation Satisfied"
+        unique_id: side_garden_irrigation_satisfied
+        icon: mdi:sprout
+        state: >
+          {% set u = states('sensor.side_garden_irrigation_urgency') %}
+          {{ u | is_number and u | int <= 0 }}
+
+      - name: "Front Garden Irrigation Satisfied"
+        unique_id: front_garden_irrigation_satisfied
+        icon: mdi:sprout
+        state: >
+          {% set u = states('sensor.front_garden_irrigation_urgency') %}
+          {{ u | is_number and u | int <= 0 }}
 
 
 # =============================================================================
@@ -1045,6 +1226,8 @@ script:
                or now() >= states('input_datetime.irrigation_pause_until') | as_datetime | as_local }}
           no_rain_delay: >
             {{ is_state('input_boolean.rain_delay_active', 'off') }}
+          not_raining: >
+            {{ is_state('binary_sensor.irrigation_raining_now', 'off') }}
           lock_free: >
             {{ is_state('input_boolean.irrigation_running', 'off') }}
           hours_since_watered: >
@@ -1069,12 +1252,12 @@ script:
             {{ states('sensor.' ~ entity_prefix ~ '_dryness_factor') }}
           rain_factor: >
             {{ states('sensor.irrigation_rain_factor') }}
+          owm_prob: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'owm_prob_24h') }}
+          owm_precip: >
+            {{ state_attr('sensor.irrigation_rain_factor', 'owm_precip_24h') }}
           nws_prob: >
             {{ state_attr('sensor.irrigation_rain_factor', 'nws_prob_24h') }}
-          nws_precip: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'nws_precip_24h') }}
-          met_prob: >
-            {{ state_attr('sensor.irrigation_rain_factor', 'met_prob_24h') }}
           met_precip: >
             {{ state_attr('sensor.irrigation_rain_factor', 'met_precip_24h') }}
           last_watered: >
@@ -1105,13 +1288,14 @@ script:
                 Window(05-09h): {{ in_window }}.
                 Paused({{ pause_days }}d): {{ not not_paused }}.
                 Rain delay: {{ not no_rain_delay }}.
+                Raining now: {{ not not_raining }}.
                 Lock held: {{ not lock_free }}.
                 Watered recently: {{ not not_watered_recently }} (last: {{ last_watered }}).
                 Quorum {{ valid_sensors }}/{{ total_sensors }}: {{ quorum_ok }}.
                 Moisture: {{ moisture_mean }}% | Dryness: {{ dryness_factor }}.
-                NWS: {{ nws_prob }}%/{{ nws_precip }}" Met: {{ met_prob }}%/{{ met_precip }}".
+                OWM: {{ owm_prob }}%/{{ owm_precip }}" NWS: {{ nws_prob }}% Met: {{ met_precip }}".
                 Rain factor: {{ rain_factor }} | Urgency: {{ urgency }}.
-                GATE RESULT: {{ 'PASS-normal' if (in_season and in_window and not_paused and no_rain_delay and lock_free and not_watered_recently and quorum_ok and urgency >= 1) else 'PASS-overdue' if (in_season and in_window and not_paused and no_rain_delay and lock_free and quorum_ok and overdue and rain_factor | int(0) < 2) else 'BLOCK' }}.
+                GATE RESULT: {{ 'PASS-normal' if (in_season and in_window and not_paused and no_rain_delay and not_raining and lock_free and not_watered_recently and quorum_ok and urgency >= 1) else 'PASS-overdue' if (in_season and in_window and not_paused and no_rain_delay and not_raining and lock_free and quorum_ok and overdue and rain_factor | int(0) < 2) else 'BLOCK' }}.
                 Hours since watered: {{ hours_since_watered }}h | Force watering enabled: {{ force_watering_enabled }} (threshold {{ force_watering_hours }}h) | Overdue: {{ overdue }}.
               entity_id: input_boolean.irrigation_debug
 
@@ -1119,7 +1303,7 @@ script:
       - condition: template
         value_template: >
           {{ in_season and in_window and not_paused and no_rain_delay
-             and lock_free and quorum_ok
+             and not_raining and lock_free and quorum_ok
              and ((not_watered_recently and urgency >= 1)
                   or (overdue and rain_factor | int(0) < 2)) }}
 
@@ -1151,7 +1335,9 @@ script:
                     full 3-cycle run.
                   level: warning
               - action: "{{ target_script }}"
-                data: {}
+                data:
+                  stop_check_entities:
+                    - binary_sensor.irrigation_raining_now
           # Normal path — urgency >= 2: full run
           - conditions:
               - condition: template
@@ -1164,7 +1350,10 @@ script:
                     full 3-cycle run.
                   level: warning
               - action: "{{ target_script }}"
-                data: {}
+                data:
+                  stop_check_entities:
+                    - binary_sensor.irrigation_raining_now
+                    - "binary_sensor.{{ entity_prefix }}_irrigation_satisfied"
           # Normal path — urgency == 1: reduced run
           - conditions:
               - condition: template
@@ -1179,6 +1368,9 @@ script:
               - action: "{{ target_script }}"
                 data:
                   num_cycles: 2
+                  stop_check_entities:
+                    - binary_sensor.irrigation_raining_now
+                    - "binary_sensor.{{ entity_prefix }}_irrigation_satisfied"
     mode: single
 
   irrigation_record_last_watered:
@@ -1495,11 +1687,14 @@ automation:
   # ===========================================================================
   # RAIN DELAY — Auto-set on significant rainfall forecast anywhere in next 24h
   #
-  # Requires BOTH NWS and Met.no to independently find at least one hourly
-  # forecast block within the next 24 hours showing >80% probability AND
-  # >0.5" precipitation. This deliberately mirrors the conservative
-  # "both sources must agree" philosophy used elsewhere (sensor.irrigation_rain_factor)
-  # to avoid skipping watering based on one source's outlier prediction.
+  # Requires OWM to find at least one hourly forecast block within the next
+  # 24 hours showing >80% probability AND >0.5" precipitation, confirmed by
+  # an independent source on the field it actually provides: NWS max
+  # probability >80%, or Met.no 24h total >0.5". (Previously this required
+  # the per-hour check from both NWS and Met.no, which could never pass —
+  # NWS has no amount and Met.no has no probability.) Mirrors the "a second
+  # source must agree" policy of sensor.irrigation_rain_factor, to avoid
+  # skipping watering based on one source's outlier prediction.
   #
   # Widened from an original 6-hour window: a 6h lookahead only caught rain
   # about to start imminently, missing scenarios like "heavy rain forecast
@@ -1526,8 +1721,9 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ state_attr('sensor.irrigation_nws_forecast_cache', 'imminent_heavy_rain_24h') == true
-             and state_attr('sensor.irrigation_met_no_forecast_cache', 'imminent_heavy_rain_24h') == true }}
+          {{ state_attr('sensor.irrigation_owm_forecast_cache', 'imminent_heavy_rain_24h') == true
+             and (state_attr('sensor.irrigation_nws_forecast_cache', 'prob_24h') | int(0) > 80
+                  or state_attr('sensor.irrigation_met_no_forecast_cache', 'precip_24h') | float(0) > 0.5) }}
       - condition: state
         entity_id: input_boolean.rain_delay_active
         state: "off"
@@ -1544,8 +1740,9 @@ automation:
       - action: system_log.write
         data:
           message: >
-            Rain delay activated — both NWS and Met.no forecast >80% / >0.5"
-            within the next 24 hours. Irrigation suppressed until
+            Rain delay activated — OWM forecasts an hour of >80% / >0.5"
+            within the next 24 hours, confirmed by NWS (>80%) or Met.no
+            (>0.5" total). Irrigation suppressed until
             {{ states('input_datetime.rain_delay_until') }}.
           level: info
     mode: single

@@ -16,6 +16,10 @@ blueprint:
       - Per-minute valve state monitoring — alerts if valve closes prematurely
       - Availability check at startup — alerts if valve is unavailable/unknown
       - Optional completion notification
+      - Optional between-cycle stop check: pass stop_check_entities (a list
+        of entity ids) in the script's service data; if any is 'on' after a
+        soak, the remaining cycles are skipped and the run ends cleanly
+        (e.g. it started raining, or the soil is already wet enough)
       - Notifications via notify.send_message targeting notify entity IDs
         resolved from sensor.irrigation_notify_targets_resolved (see
         irrigation package) -- e.g. notify.tis_iphone
@@ -154,6 +158,9 @@ variables:
   var_num_cycles_default: !input num_cycles
   var_num_cycles: "{{ num_cycles | default(var_num_cycles_default) | int(3) }}"
   var_notify_on_completion: !input notify_on_completion
+  # Optional per-call list of entity ids checked after each soak, before the
+  # next cycle. Any one 'on' ends the run early. Empty = always run all cycles.
+  var_stop_check_entities: "{{ stop_check_entities | default([]) }}"
 
 sequence:
 
@@ -474,6 +481,56 @@ sequence:
                       Lock released.
                     level: warning
                 - stop: "Irrigation canceled during soak."
+
+            # ── Between-cycle stop check ──────────────────────────────────
+            - variables:
+                stop_reasons: >
+                  {{ var_stop_check_entities | select('is_state', 'on') | list }}
+            - if:
+                - condition: template
+                  value_template: "{{ stop_reasons | count > 0 }}"
+              then:
+                - service: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.irrigation_running
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.irrigation_active_zone
+                  data:
+                    value: ""
+                - service: input_number.set_value
+                  target:
+                    entity_id: input_number.irrigation_total_cycles
+                  data:
+                    value: 0
+                - service: system_log.write
+                  data:
+                    message: >
+                      Cycle & Soak [{{ var_zone_name }}]: stopping after cycle
+                      {{ states('input_number.irrigation_cycle_counter') | int(0) }}
+                      of {{ var_num_cycles | int(1) }} —
+                      {{ stop_reasons | map('state_attr', 'friendly_name') | join(', ') }}.
+                      Lock released.
+                    level: info
+                - if:
+                    - condition: template
+                      value_template: "{{ var_notify_on_completion }}"
+                  then:
+                    - repeat:
+                        for_each: >
+                          {{ state_attr('sensor.irrigation_notify_targets_resolved', 'targets') or [] }}
+                        sequence:
+                          - service: notify.send_message
+                            target:
+                              entity_id: "{{ repeat.item }}"
+                            data:
+                              title: "🌧️ Irrigation Stopped Early"
+                              message: >
+                                {{ var_zone_name }} stopped after
+                                {{ states('input_number.irrigation_cycle_counter') | int(0) }}
+                                of {{ var_num_cycles | int(1) }} cycles —
+                                {{ stop_reasons | map('state_attr', 'friendly_name') | join(', ') }}.
+                - stop: "Stop check triggered between cycles."
 
   # ── All cycles complete ─────────────────────────────────────────────────────
   - service: input_boolean.turn_off
