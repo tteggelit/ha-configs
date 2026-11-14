@@ -615,6 +615,25 @@ template:
         device_class: moisture
         state_class: measurement
         icon: mdi:water-percent
+        # Quorum gate lives in availability, not state: a numeric sensor whose
+        # state renders the string 'unavailable' trips HA's template validator
+        # ("expected a number") on every startup before Z2M sensors report.
+        availability: >
+          {% set sensors = [
+            states('sensor.back_vegetable_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_3_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_4_soil_moisture'),
+            states('sensor.back_vegetable_garden_moisture_sensor_5_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list %}
+          {{ valid | count >= 3 }}
         state: >
           {% set sensors = [
             states('sensor.back_vegetable_garden_moisture_sensor_1_soil_moisture'),
@@ -630,11 +649,7 @@ template:
             | reject('equalto', 0.0)
             | reject('equalto', 100.0)
             | list %}
-          {% if valid | count >= 3 %}
-            {{ (valid | sum / valid | count) | round(1) }}
-          {% else %}
-            unavailable
-          {% endif %}
+          {% if valid %}{{ (valid | sum / valid | count) | round(1) }}{% endif %}
 
       - name: "Back Garden Quorum"
         unique_id: back_garden_quorum
@@ -728,6 +743,24 @@ template:
         device_class: moisture
         state_class: measurement
         icon: mdi:water-percent
+        # Quorum gate lives in availability, not state: a numeric sensor whose
+        # state renders the string 'unavailable' trips HA's template validator
+        # ("expected a number") on every startup before Z2M sensors report.
+        availability: >
+          {% set sensors = [
+            states('sensor.side_vegetable_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_3_soil_moisture'),
+            states('sensor.side_vegetable_garden_moisture_sensor_4_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list %}
+          {{ valid | count >= 3 }}
         state: >
           {% set sensors = [
             states('sensor.side_vegetable_garden_moisture_sensor_1_soil_moisture'),
@@ -742,11 +775,7 @@ template:
             | reject('equalto', 0.0)
             | reject('equalto', 100.0)
             | list %}
-          {% if valid | count >= 3 %}
-            {{ (valid | sum / valid | count) | round(1) }}
-          {% else %}
-            unavailable
-          {% endif %}
+          {% if valid %}{{ (valid | sum / valid | count) | round(1) }}{% endif %}
 
       - name: "Side Garden Quorum"
         unique_id: side_garden_quorum
@@ -835,6 +864,23 @@ template:
         device_class: moisture
         state_class: measurement
         icon: mdi:water-percent
+        # Quorum gate lives in availability, not state: a numeric sensor whose
+        # state renders the string 'unavailable' trips HA's template validator
+        # ("expected a number") on every startup before Z2M sensors report.
+        availability: >
+          {% set sensors = [
+            states('sensor.front_garden_moisture_sensor_1_soil_moisture'),
+            states('sensor.front_garden_moisture_sensor_2_soil_moisture'),
+            states('sensor.floating_garden_moisture_sensor_1_soil_moisture')
+          ] %}
+          {% set valid = sensors
+            | reject('in', ['unavailable','unknown','none',''])
+            | map('float', -1)
+            | reject('equalto', -1)
+            | reject('equalto', 0.0)
+            | reject('equalto', 100.0)
+            | list %}
+          {{ valid | count >= 2 }}
         state: >
           {% set sensors = [
             states('sensor.front_garden_moisture_sensor_1_soil_moisture'),
@@ -848,11 +894,7 @@ template:
             | reject('equalto', 0.0)
             | reject('equalto', 100.0)
             | list %}
-          {% if valid | count >= 2 %}
-            {{ (valid | sum / valid | count) | round(1) }}
-          {% else %}
-            unavailable
-          {% endif %}
+          {% if valid %}{{ (valid | sum / valid | count) | round(1) }}{% endif %}
 
       - name: "Front Garden Quorum"
         unique_id: front_garden_quorum
