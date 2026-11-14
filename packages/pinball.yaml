@@ -1,0 +1,127 @@
+# Pinball tables (Dungeons & Dragons, Transformers)
+#
+# Desired state + reconciler:
+#
+#   - "Pinball Tables Should Be On" is the desired state, derived purely from
+#     the alarm: on when disarmed, off when armed (Home or Away).
+#   - When the desired state flips to on, both tables are turned on once.
+#     This is edge-triggered on purpose, so a table someone turns off during
+#     the day isn't turned straight back on.
+#   - While the desired state is off, a reconciler polls every minute and
+#     turns off any table that is idle and has been switched on for at least
+#     5 minutes. A game in progress when the alarm is armed, or a table
+#     turned on by hand at night, is left alone until it's idle, then caught
+#     on the next poll. Polling, rather than a long wait, means a restart or
+#     reload can't lose track of a table.
+#
+# Each table is powered through a Zigbee smart outlet that reports power
+# draw. A table sitting in attract mode draws a steady amount, and being
+# played pushes it noticeably higher (flippers, coils, motors). The "In Use"
+# binary sensors turn that into an on/off signal and hold it on until the
+# table has been idle for 5 continuous minutes (delay_off).
+#
+# Idle thresholds come from 10 days of recorder history (Nov 2026):
+#   D&D:          idle 51-73 W (attract-mode spikes reach 73), play to ~600 W
+#   Transformers: idle 75-83 W, play to ~250 W
+# A single reading above the threshold counts as play. Flipper and coil
+# pulses fire constantly during a game, so a game never goes 5 minutes
+# without one.
+
+template:
+  - binary_sensor:
+      - name: "Pinball Tables Should Be On"
+        unique_id: pinball_tables_should_be_on
+        icon: mdi:power
+        # Unavailable (not off) when the alarm integration drops out, so an
+        # Abode outage can't look like the alarm being armed and turn idle
+        # tables off.
+        availability: >
+          {{ has_value('alarm_control_panel.abode_alarm') }}
+        state: >
+          {{ is_state('alarm_control_panel.abode_alarm', 'disarmed') }}
+
+      - name: "Dungeons & Dragons Pinball In Use"
+        unique_id: dungeons_dragons_pinball_in_use
+        icon: mdi:gamepad-variant
+        # Unavailable (not off) when the outlet drops off the Zigbee mesh, so
+        # a lost power reading can never look like an idle table.
+        availability: >
+          {{ has_value('sensor.dungeons_dragons_pinball_outlet_power') }}
+        state: >
+          {{ states('sensor.dungeons_dragons_pinball_outlet_power') | float(0) > 78 }}
+        delay_off:
+          minutes: 5
+
+      - name: "Transformers Pinball In Use"
+        unique_id: transformers_pinball_in_use
+        icon: mdi:gamepad-variant
+        availability: >
+          {{ has_value('sensor.transformers_pinball_outlet_power') }}
+        state: >
+          {{ states('sensor.transformers_pinball_outlet_power') | float(0) > 88 }}
+        delay_off:
+          minutes: 5
+
+automation:
+  - id: pinball_tables_on
+    alias: Pinball Tables On
+    description: >-
+      Turn on both pinball tables when "Pinball Tables Should Be On" changes
+      from off to on (the alarm was disarmed).
+    triggers:
+      # from: 'off' so recovering from unavailable/unknown (restart, Abode
+      # outage) doesn't turn the tables on.
+      - trigger: state
+        entity_id: binary_sensor.pinball_tables_should_be_on
+        from: 'off'
+        to: 'on'
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id:
+            - switch.dungeons_dragons_pinball_outlet
+            - switch.transformers_pinball_outlet
+    mode: single
+
+  - id: pinball_tables_off_when_idle
+    alias: Pinball Tables Off When Idle
+    description: >-
+      While "Pinball Tables Should Be On" is off, turn off any pinball table
+      that is idle and has been switched on for at least 5 minutes. Runs
+      every minute and when the desired state changes to off.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.pinball_tables_should_be_on
+        to: 'off'
+      - trigger: time_pattern
+        minutes: /1
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.pinball_tables_should_be_on
+        state: 'off'
+    actions:
+      - repeat:
+          for_each:
+            - outlet: switch.dungeons_dragons_pinball_outlet
+              in_use: binary_sensor.dungeons_dragons_pinball_in_use
+            - outlet: switch.transformers_pinball_outlet
+              in_use: binary_sensor.transformers_pinball_in_use
+          sequence:
+            # The "on for 5 minutes" check gives a table turned on by hand
+            # time to boot and be played before it can count as idle. It
+            # also covers a restart mid-game: the In Use sensor can come up
+            # off right away (delay_off doesn't apply at startup), but the
+            # outlet's last_changed resets to startup time.
+            - if:
+                - condition: template
+                  value_template: >
+                    {% set outlet = expand(repeat.item.outlet) | first %}
+                    {{ outlet.state == 'on'
+                       and is_state(repeat.item.in_use, 'off')
+                       and now() - outlet.last_changed >= timedelta(minutes=5) }}
+              then:
+                - action: switch.turn_off
+                  target:
+                    entity_id: "{{ repeat.item.outlet }}"
+    mode: single
+    max_exceeded: silent
